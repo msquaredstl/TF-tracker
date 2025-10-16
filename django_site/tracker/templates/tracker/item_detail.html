@@ -1,0 +1,54 @@
+{% extends "tracker/base.html" %}
+{% block title %}{{ item.name }} — TF Tracker (Django){% endblock %}
+{% block content %}
+<a href="{% url 'tracker:item-list' %}" class="btn secondary">Back to list</a>
+<section class="card">
+  <h2>{{ item.name }}</h2>
+  <dl>
+    <dt>SKU</dt>
+    <dd>{{ item.sku|default_if_none:"" }}</dd>
+    <dt>Version</dt>
+    <dd>{{ item.version|default_if_none:"" }}</dd>
+    <dt>Year</dt>
+    <dd>{{ item.year|default_if_none:"" }}</dd>
+    <dt>Company</dt>
+    <dd>{{ item.company.name|default_if_none:"" }}</dd>
+    <dt>Line</dt>
+    <dd>{{ item.line.name|default_if_none:"" }}</dd>
+    <dt>Series</dt>
+    <dd>{{ item.series.name|default_if_none:"" }}</dd>
+    <dt>Type</dt>
+    <dd>{{ item.type.name|default_if_none:"" }}</dd>
+    <dt>Category</dt>
+    <dd>{{ item.category.name|default_if_none:"" }}</dd>
+    <dt>Status</dt>
+    <dd>{{ item.status|default_if_none:"" }}</dd>
+    <dt>Location</dt>
+    <dd>{{ item.location|default_if_none:"" }}</dd>
+    <dt>URL</dt>
+    <dd>
+      {% if item.url %}
+        <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.url }}</a>
+      {% endif %}
+    </dd>
+    <dt>Notes</dt>
+    <dd>{{ item.notes|default_if_none:"" }}</dd>
+    <dt>Primary Character</dt>
+    <dd>{{ item.primary_character.name|default_if_none:"" }}</dd>
+    <dt>All Characters</dt>
+    <dd>
+      {% if characters %}
+        <ul>
+        {% for character in characters %}
+          <li>
+            {{ character.name }}{% if character.is_primary %} <strong>(Primary)</strong>{% endif %}
+          </li>
+        {% endfor %}
+        </ul>
+      {% else %}
+        None listed.
+      {% endif %}
+    </dd>
+  </dl>
+</section>
+{% endblock %}
