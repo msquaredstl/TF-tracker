@@ -1,4 +1,4 @@
-# Transformers Collection Tracker — Complete
+# Transformers Collection Tracker
 
 Normalized FastAPI + SQLModel + SQLite app with importers and seeders, plus your attribute CSVs.
 
