@@ -32,6 +32,9 @@ python -m app.importers.import_csv /path/to/your/Sheet1.csv
 ```
 
 Notes:
+- Configure your remote database credentials in `.env` first; the importer will
+  refuse to run against the local SQLite fallback unless you pass
+  `--allow-sqlite`.
 - Characters field supports comma/semicolon; add `|primary` after one name.
 - Lines auto-link to Companies when both names are present.
 - All seeders/importers are idempotent (safe to re-run).
