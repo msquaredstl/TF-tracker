@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
-from app.db.session import engine, init_db
+from app.db.session import DEFAULT_SQLITE_URL, DB_URL, engine, init_db
 from app.models import (
     Item, Company, Line, Series, ItemType, Category, Character, ItemCharacter,
     Vendor, Purchase, Faction
 )
-from app.utils import get_or_create
+from app.utils import get_or_create, split_characters
 
 DEFAULT_MAP = {
   "name": ["name","figure","character","title"],
@@ -86,18 +86,23 @@ def to_int(val: str) -> Optional[int]:
     except Exception:
         return None
 
-def split_characters(s: Optional[str]):
-    if not s: return []
-    parts = []
-    for token in s.replace(";","\n").replace(",","\n").split("\n"):
-        t = token.strip()
-        if t: parts.append(t)
-    return parts
+def ensure_database_target(db_url: str, allow_sqlite: bool) -> None:
+    if not allow_sqlite and db_url == DEFAULT_SQLITE_URL:
+        raise SystemExit(
+            "Refusing to import into the local SQLite fallback. "
+            "Set remote database credentials or pass --allow-sqlite to proceed."
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(description="Import a CSV export into normalized tables.")
     parser.add_argument("csv_path", help="Path to the CSV file (exported from Google Sheets).")
     parser.add_argument("--map", dest="mapfile", help="Optional JSON mapping overrides.", default=None)
+    parser.add_argument(
+        "--allow-sqlite",
+        action="store_true",
+        help="Permit importing into the local SQLite fallback database.",
+    )
     args = parser.parse_args()
 
     csv_path = Path(args.csv_path)
@@ -108,6 +113,8 @@ def main():
     if args.mapfile:
         with open(args.mapfile, "r", encoding="utf-8") as f:
             user_map = json.load(f)
+
+    ensure_database_target(DB_URL, args.allow_sqlite)
 
     init_db()
 

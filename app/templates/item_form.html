@@ -25,7 +25,7 @@
   <label>Type<input name="type_name" value="{{ item.type.name if item and item.type else '' }}"></label>
   <label>Category<input name="category_name" value="{{ item.category.name if item and item.category else '' }}"></label>
 
-  <label class="full">Characters (comma-separated; add " |primary" after one name)
+  <label class="full">Characters (comma- or semicolon-separated; add "|primary" after one name)
     <input name="characters" value="{{ characters_csv if item else '' }}">
   </label>
 

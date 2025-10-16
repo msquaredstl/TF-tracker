@@ -7,7 +7,7 @@ from typing import Optional, List
 
 from .db.session import init_db, get_session
 from .models import Item, Company, Line, Series, ItemType, Category, Character, ItemCharacter
-from .utils import get_or_create
+from .utils import get_or_create, split_characters
 
 app = FastAPI(title="Transformers Collection Tracker — Complete")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -44,7 +44,7 @@ def _sync_characters(session: Session, item: Item, characters_csv: Optional[str]
         session.delete(link)
     if not characters_csv:
         return
-    entries = [e.strip() for e in characters_csv.split(",") if e.strip()]
+    entries = split_characters(characters_csv)
     primary_set = False
     for idx, e in enumerate(entries):
         name = e
