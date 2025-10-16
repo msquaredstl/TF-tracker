@@ -2,7 +2,7 @@ import argparse
 import importlib
 import importlib.util
 import os
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Sequence
 
 from sqlalchemy.engine import Engine, URL
 from sqlalchemy.exc import SQLAlchemyError
@@ -17,17 +17,26 @@ else:
 
 load_dotenv()
 
+DEFAULT_SQLITE_URL = "sqlite:///./collection.db"
+_REQUIRED_COMPONENT_KEYS: Sequence[str] = ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_NAME")
+
 
 def _build_url_from_components() -> Optional[str]:
-    driver = os.getenv("DB_DRIVER", "mysql+pymysql")
-    username = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
-    host = os.getenv("DB_HOST")
-    database = os.getenv("DB_NAME")
-    port_raw = os.getenv("DB_PORT")
+    required_values = {key: os.getenv(key) for key in _REQUIRED_COMPONENT_KEYS}
+    provided_required = {key: value for key, value in required_values.items() if value}
 
-    if not all([username, password, host, database]):
+    if provided_required and len(provided_required) != len(required_values):
+        missing = ", ".join(sorted(key for key, value in required_values.items() if not value))
+        raise RuntimeError(
+            "Incomplete component-based database configuration. Missing environment variables: "
+            f"{missing}."
+        )
+
+    if not provided_required:
         return None
+
+    driver = os.getenv("DB_DRIVER", "mysql+pymysql")
+    port_raw = os.getenv("DB_PORT")
 
     try:
         port = int(port_raw) if port_raw else None
@@ -36,24 +45,25 @@ def _build_url_from_components() -> Optional[str]:
 
     url = URL.create(
         drivername=driver,
-        username=username,
-        password=password,
-        host=host,
+        username=required_values["DB_USER"],
+        password=required_values["DB_PASSWORD"],
+        host=required_values["DB_HOST"],
         port=port,
-        database=database,
+        database=required_values["DB_NAME"],
     )
     return url.render_as_string(hide_password=False)
 
 
 def resolve_database_url() -> str:
-    url = os.getenv("DB_URL") or _build_url_from_components()
+    url = os.getenv("DB_URL")
+    if url:
+        return url
 
-    if not url:
-        raise RuntimeError(
-            "Database configuration missing. Provide DB_URL or the DB_* components in the environment."
-        )
+    component_url = _build_url_from_components()
+    if component_url:
+        return component_url
 
-    return url
+    return DEFAULT_SQLITE_URL
 
 
 def _dialect_prefix(url: str) -> str:

@@ -48,6 +48,13 @@ class VerifyConnectionTests(TestCase):
 
 
 class ResolveDatabaseURLTests(TestCase):
+    def test_resolve_defaults_to_sqlite_when_unconfigured(self) -> None:
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(
+                db_session.resolve_database_url(),
+                db_session.DEFAULT_SQLITE_URL,
+            )
+
     def test_resolve_from_components(self) -> None:
         with mock.patch.dict(
             os.environ,
@@ -65,6 +72,19 @@ class ResolveDatabaseURLTests(TestCase):
                 db_session.resolve_database_url(),
                 "mysql+pymysql://user:pass@example.com:3306/sample",
             )
+
+    def test_resolve_requires_all_components_when_any_provided(self) -> None:
+        with mock.patch.dict(
+            os.environ,
+            {
+                "DB_HOST": "example.com",
+                "DB_USER": "user",
+                "DB_PASSWORD": "pass",
+            },
+            clear=True,
+        ):
+            with self.assertRaises(RuntimeError):
+                db_session.resolve_database_url()
 
     def test_resolve_requires_integer_port(self) -> None:
         with mock.patch.dict(
