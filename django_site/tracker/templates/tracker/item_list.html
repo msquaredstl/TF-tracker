@@ -1,0 +1,50 @@
+{% extends "tracker/base.html" %}
+{% block title %}Items — TF Tracker (Django){% endblock %}
+{% block content %}
+<form method="get" action="" class="filters">
+  <input type="text" name="q" placeholder="Search name/SKU/notes" value="{{ query }}">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in "Owned,Preorder,Sold,Wishlist".split(",") %}
+      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <select name="company">
+    <option value="">All Companies</option>
+    {% for name in companies %}
+      <option value="{{ name }}" {% if active_company == name %}selected{% endif %}>{{ name }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">Filter</button>
+  <a href="{% url 'tracker:item-list' %}" class="btn secondary">Reset</a>
+</form>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Company</th>
+      <th>Line</th>
+      <th>Series</th>
+      <th>Year</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td><a href="{% url 'tracker:item-detail' item.pk %}">{{ item.name }}</a></td>
+      <td>{{ item.company.name|default_if_none:"" }}</td>
+      <td>{{ item.line.name|default_if_none:"" }}</td>
+      <td>{{ item.series.name|default_if_none:"" }}</td>
+      <td>{{ item.year|default_if_none:"" }}</td>
+      <td>{{ item.status|default_if_none:"" }}</td>
+    </tr>
+    {% empty %}
+    <tr>
+      <td colspan="6">No items found.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

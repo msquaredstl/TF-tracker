@@ -38,3 +38,16 @@ Notes:
 - Characters field supports comma/semicolon; add `|primary` after one name.
 - Lines auto-link to Companies when both names are present.
 - All seeders/importers are idempotent (safe to re-run).
+
+## Django frontend/backend
+Run the Django project located under `django_site/` if you prefer a traditional Django stack
+that shares the same SQLite/SQLModel database:
+
+```bash
+cd django_site
+python manage.py runserver
+# open http://127.0.0.1:8000
+```
+
+The Django models reuse the existing tables, so your data stays in sync regardless of whether
+you use the FastAPI or Django entry points.
