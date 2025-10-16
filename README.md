@@ -7,9 +7,13 @@ Normalized FastAPI + SQLModel + SQLite app with importers and seeders, plus your
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+cp .env.example .env         # fill in your remote MySQL credentials or keep the SQLite default
+python -m app.db.session --check-connection  # uses the credentials from .env by default
 uvicorn app.main:app --reload
 # open http://127.0.0.1:8000
 ```
+
+> Need to confirm a set of credentials before updating `.env`? Run `python -m app.db.session --check-connection --url "mysql+pymysql://username:password@host:3306/database"` to validate connectivity on demand.
 
 ## Seed data
 ### Option A — YAML (from `seeds/seed.yaml`)
