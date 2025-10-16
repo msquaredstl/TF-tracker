@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="get" action="/" class="filters">
+  <input type="text" name="q" placeholder="Search name/SKU/notes" value="{{ q }}">
+  <select name="status">
+    <option value="">All Statuses</option>
+    {% for s in ["Owned","Preorder","Sold","Wishlist"] %}
+      <option value="{{ s }}" {% if status==s %}selected{% endif %}>{{ s }}</option>
+    {% endfor %}
+  </select>
+  <select name="company">
+    <option value="">All Companies</option>
+    {% for m in companies %}
+      <option value="{{ m }}" {% if active_company==m %}selected{% endif %}>{{ m }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">Filter</button>
+  <a href="/" class="btn secondary">Reset</a>
+</form>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Company</th>
+      <th>Line</th>
+      <th>Series</th>
+      <th>Year</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    <tr>
+      <td><a href="/items/{{ item.id }}">{{ item.name }}</a></td>
+      <td>{{ item.company.name if item.company else "" }}</td>
+      <td>{{ item.line.name if item.line else "" }}</td>
+      <td>{{ item.series.name if item.series else "" }}</td>
+      <td>{{ item.year or "" }}</td>
+      <td>{{ item.status or "" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if not items %}
+<p>No items found.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>{{ 'Edit' if item else 'Add' }} Item</h2>
+<form method="post" action="{{ '/items/' ~ item.id ~ '/edit' if item else '/items/new' }}" class="form-grid">
+  <label>Name<input name="name" required value="{{ item.name if item else '' }}"></label>
+  <label>SKU<input name="sku" value="{{ item.sku if item else '' }}"></label>
+  <label>Version<input name="version" value="{{ item.version if item else '' }}"></label>
+  <label>Year<input type="number" name="year" value="{{ item.year if item else '' }}"></label>
+  <label>Scale<input name="scale" value="{{ item.scale if item else '' }}"></label>
+  <label>Condition<input name="condition" value="{{ item.condition if item else '' }}"></label>
+  <label>Status
+    <select name="status">
+      {% for s in ["Owned","Preorder","Sold","Wishlist"] %}
+        <option value="{{ s }}" {% if item and item.status==s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Location<input name="location" value="{{ item.location if item else '' }}"></label>
+  <label>URL<input name="url" value="{{ item.url if item else '' }}"></label>
+  <label class="full">Notes<textarea name="notes" rows="3">{{ item.notes if item else '' }}</textarea></label>
+
+  <label>Company<input name="company_name" value="{{ item.company.name if item and item.company else '' }}"></label>
+  <label>Line<input name="line_name" value="{{ item.line.name if item and item.line else '' }}"></label>
+  <label>Series<input name="series_name" value="{{ item.series.name if item and item.series else '' }}"></label>
+  <label>Type<input name="type_name" value="{{ item.type.name if item and item.type else '' }}"></label>
+  <label>Category<input name="category_name" value="{{ item.category.name if item and item.category else '' }}"></label>
+
+  <label class="full">Characters (comma-separated; add " |primary" after one name)
+    <input name="characters" value="{{ characters_csv if item else '' }}">
+  </label>
+
+  <div class="actions">
+    <button class="btn" type="submit">{{ 'Save' if item else 'Create' }}</button>
+    <a class="btn secondary" href="{{ '/items/' ~ item.id if item else '/' }}">Cancel</a>
+  </div>
+</form>
+
+{% if item %}
+<form method="post" action="/items/{{ item.id }}/delete" onsubmit="return confirm('Delete this item?');">
+  <button class="btn danger" type="submit">Delete</button>
+</form>
+{% endif %}
+{% endblock %}
