@@ -1,7 +1,7 @@
 """Django ORM models that reuse the existing SQLModel tables."""
 from __future__ import annotations
 
-from django.db import models
+from django.db import connection, models
 
 
 class Company(models.Model):
@@ -113,27 +113,41 @@ class Item(models.Model):
         managed = False
         db_table = "item"
 
+    def character_rows(self) -> list[dict[str, object]]:
+        """Return metadata about characters linked to this item."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                """
+                SELECT c.id, c.name, ic.is_primary, ic.role
+                FROM itemcharacter AS ic
+                INNER JOIN character AS c ON c.id = ic.character_id
+                WHERE ic.item_id = %s
+                ORDER BY ic.is_primary DESC, LOWER(c.name)
+                """,
+                [self.pk],
+            )
+            rows = cursor.fetchall()
+        return [
+            {
+                "id": row[0],
+                "name": row[1],
+                "is_primary": bool(row[2]),
+                "role": row[3],
+            }
+            for row in rows
+        ]
+
     @property
     def primary_character(self) -> Character | None:
-        link = self.character_links.filter(is_primary=True).select_related("character").first()
-        if link:
-            return link.character
+        rows = self.character_rows()
+        for row in rows:
+            if row["is_primary"]:
+                return Character.objects.filter(pk=row["id"]).first()
+        if rows:
+            return Character.objects.filter(pk=rows[0]["id"]).first()
         return None
 
     def __str__(self) -> str:  # pragma: no cover
         return self.name
 
 
-class ItemCharacter(models.Model):
-    item = models.ForeignKey(Item, related_name="character_links", on_delete=models.CASCADE, db_column="item_id")
-    character = models.ForeignKey(Character, related_name="item_links", on_delete=models.CASCADE, db_column="character_id")
-    is_primary = models.BooleanField(default=False)
-    role = models.CharField(max_length=255, null=True, blank=True)
-
-    class Meta:
-        managed = False
-        db_table = "itemcharacter"
-        unique_together = ("item", "character")
-
-    def __str__(self) -> str:  # pragma: no cover
-        return f"{self.item} — {self.character}"

@@ -3,23 +3,14 @@ from __future__ import annotations
 
 from typing import Any, Iterable, List, Mapping
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import ITEM_STATUS_CHOICES, ItemForm
-from .models import (
-    Category,
-    Character,
-    Company,
-    Item,
-    ItemCharacter,
-    ItemType,
-    Line,
-    Series,
-)
+from .models import Category, Character, Company, Item, ItemType, Line, Series
 
 
 def _clean_name(value: str | None) -> str | None:
@@ -77,27 +68,42 @@ def _split_characters(value: str | None) -> List[str]:
 
 
 def _sync_characters(item: Item, characters_raw: str | None) -> None:
-    item.character_links.all().delete()
     entries = _split_characters(characters_raw)
-    created_links: List[ItemCharacter] = []
     primary_found = False
-    for entry in entries:
-        parts = [part.strip() for part in entry.split("|")]
-        name = parts[0]
-        is_primary = any(part.lower() == "primary" for part in parts[1:])
-        character, _ = Character.objects.get_or_create(name=name)
-        link = ItemCharacter.objects.create(
-            item=item,
-            character=character,
-            is_primary=is_primary,
-        )
-        created_links.append(link)
-        if is_primary:
-            primary_found = True
-    if entries and not primary_found and created_links:
-        first_link = created_links[0]
-        first_link.is_primary = True
-        first_link.save(update_fields=["is_primary"])
+    first_character_id: int | None = None
+    seen_character_ids: set[int] = set()
+    with connection.cursor() as cursor:
+        cursor.execute("DELETE FROM itemcharacter WHERE item_id = %s", [item.pk])
+        for entry in entries:
+            parts = [part.strip() for part in entry.split("|") if part.strip()]
+            if not parts:
+                continue
+            name = parts[0]
+            is_primary = any(part.lower() == "primary" for part in parts[1:])
+            character, _ = Character.objects.get_or_create(name=name)
+            if character.pk in seen_character_ids:
+                continue
+            seen_character_ids.add(character.pk)
+            if first_character_id is None:
+                first_character_id = character.pk
+            cursor.execute(
+                """
+                INSERT INTO itemcharacter (item_id, character_id, is_primary, role)
+                VALUES (%s, %s, %s, NULL)
+                """,
+                [item.pk, character.pk, 1 if is_primary else 0],
+            )
+            if is_primary:
+                primary_found = True
+        if entries and not primary_found and first_character_id is not None:
+            cursor.execute(
+                """
+                UPDATE itemcharacter
+                SET is_primary = 1
+                WHERE item_id = %s AND character_id = %s
+                """,
+                [item.pk, first_character_id],
+            )
 
 
 def _initial_data_for_item(item: Item | None) -> dict[str, object]:
@@ -106,8 +112,8 @@ def _initial_data_for_item(item: Item | None) -> dict[str, object]:
     characters: Iterable[str] = []
     if item:
         characters = [
-            f"{link.character.name}{' |primary' if link.is_primary else ''}"
-            for link in item.character_links.select_related("character")
+            f"{row['name']}{' |primary' if row['is_primary'] else ''}"
+            for row in item.character_rows()
         ]
     characters_csv = ", ".join(characters)
     return {
@@ -210,11 +216,8 @@ def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
         Item.objects.select_related("company", "line", "series", "type", "category"), pk=pk
     )
     characters = [
-        {
-            "name": link.character.name,
-            "is_primary": link.is_primary,
-        }
-        for link in item.character_links.select_related("character").all()
+        {"name": row["name"], "is_primary": row["is_primary"]}
+        for row in item.character_rows()
     ]
     context = {
         "item": item,
