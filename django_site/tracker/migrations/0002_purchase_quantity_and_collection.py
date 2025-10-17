@@ -75,7 +75,7 @@ def populate_purchase_defaults(apps, schema_editor):
     with connection.cursor() as cursor:
         cursor.execute(
             "UPDATE purchase SET collection_id = ? WHERE collection_id IS NULL",
-            [collection.pk],
+            (collection.pk,),
         )
         cursor.execute(
             "UPDATE purchase SET qty = 1 WHERE qty IS NULL OR qty = 0",
