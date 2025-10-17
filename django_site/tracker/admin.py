@@ -9,6 +9,7 @@ from .models import (
     Category,
     Character,
     CharacterTeam,
+    Collection,
     Company,
     Faction,
     Item,
@@ -22,6 +23,12 @@ from .models import (
     Team,
     Vendor,
 )
+
+
+@admin.register(Collection)
+class CollectionAdmin(admin.ModelAdmin):
+    list_display = ("name", "user", "created_at")
+    search_fields = ("name", "user__username", "user__email")
 
 
 @admin.register(Company)
@@ -115,9 +122,11 @@ class PurchaseAdmin(admin.ModelAdmin):
         "purchase_date",
         "ship_date",
         "price",
+        "quantity",
+        "collection",
     )
-    search_fields = ("item__name", "vendor__name", "order_number")
-    list_filter = ("vendor", "order_date", "ship_date")
+    search_fields = ("item__name", "vendor__name", "order_number", "collection__name")
+    list_filter = ("vendor", "order_date", "ship_date", "collection")
 
 
 @admin.register(Item)
