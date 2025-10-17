@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Imported Data</h2>
+<p class="small text-muted">Review the items that have been imported from your collection data.</p>
+
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Company</th>
+      <th>Status</th>
+      <th>Purchase Date</th>
+      <th>Vendor</th>
+      <th>Price</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in items %}
+    {% set purchase = item.purchases[0] if item.purchases else None %}
+    <tr>
+      <td><a href="/items/{{ item.id }}">{{ item.name }}</a></td>
+      <td>{{ item.company.name if item.company else "" }}</td>
+      <td>{{ item.status or "" }}</td>
+      <td>
+        {% if purchase and purchase.purchase_date %}
+          {{ purchase.purchase_date }}
+        {% endif %}
+      </td>
+      <td>{{ purchase.vendor.name if purchase and purchase.vendor else "" }}</td>
+      <td>
+        {% if purchase and purchase.price is not none %}
+          {{ purchase.currency ~ ' ' if purchase.currency else '' }}{{ '%.2f'|format(purchase.price) }}
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if not items %}
+<p>No imported data available yet.</p>
+{% endif %}
+{% endblock %}

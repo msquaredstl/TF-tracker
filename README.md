@@ -1,4 +1,4 @@
-# Transformers Collection Tracker — Complete
+# Transformers Collection Tracker
 
 Normalized FastAPI + SQLModel + SQLite app with importers and seeders, plus your attribute CSVs.
 
@@ -14,6 +14,14 @@ uvicorn app.main:app --reload
 ```
 
 > Need to confirm a set of credentials before updating `.env`? Run `python -m app.db.session --check-connection --url "mysql+pymysql://username:password@host:3306/database"` to validate connectivity on demand.
+
+## Web pages
+
+Once the development server is running you can browse the following pages:
+
+- `/` — search and browse all items that have been entered.
+- `/imports` — review everything that has been imported from your CSV data in a tabular view.
+- `/collection` — see the complete collection with status, company, and purchase summaries. Pass `?owner=<identifier>` to scope the page to a specific owner once you start attaching ownership metadata to items.
 
 ## Seed data
 ### Option A — YAML (from `seeds/seed.yaml`)
