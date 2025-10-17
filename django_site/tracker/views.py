@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Any, Iterable, List, Mapping, Sequence
 
 from django.db import connection, transaction
@@ -14,18 +13,9 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
+from . import schema
 from .forms import ITEM_STATUS_CHOICES, ItemForm
-from .models import (
-    Category,
-    Character,
-    Company,
-    Item,
-    ItemType,
-    Line,
-    Purchase,
-    Series,
-    Vendor,
-)
+from .models import Category, Character, Company, Item, ItemType, Line, Series, Vendor
 
 
 def _clean_name(value: str | None) -> str | None:
@@ -106,45 +96,6 @@ def _fetch_scalar_list(sql: str, params: Sequence[Any] | None = None) -> List[An
         return [row[0] for row in cursor.fetchall()]
 
 
-@lru_cache(maxsize=1)
-def _purchase_column_names() -> frozenset[str]:
-    """Return the normalized column names exposed by the ``purchase`` table."""
-
-    table_name = Purchase._meta.db_table
-    try:
-        with connection.cursor() as cursor:
-            description = connection.introspection.get_table_description(
-                cursor, table_name
-            )
-    except (ProgrammingError, OperationalError):
-        return frozenset()
-
-    names: set[str] = set()
-    for column in description:
-        name = getattr(column, "name", "")
-        if not name and hasattr(column, "column_name"):
-            name = getattr(column, "column_name")  # pragma: no cover - safety net
-        if name:
-            names.add(name.lower())
-    return frozenset(names)
-
-
-def _purchase_has_column(column_name: str) -> bool:
-    return column_name.lower() in _purchase_column_names()
-
-
-def _purchase_has_order_date() -> bool:
-    """Return True when the ``purchase`` table exposes an ``order_date`` column."""
-
-    return _purchase_has_column("order_date")
-
-
-def _purchase_has_ship_date() -> bool:
-    """Return True when the ``purchase`` table exposes a ``ship_date`` column."""
-
-    return _purchase_has_column("ship_date")
-
-
 def _purchase_annotations() -> dict[str, Any]:
     """Return annotations used by :func:`item_list` for purchase metadata."""
 
@@ -153,9 +104,9 @@ def _purchase_annotations() -> dict[str, Any]:
         "ship_date_value": purchase_date_min,
         "order_date_value": purchase_date_min,
     }
-    if _purchase_has_ship_date():
+    if schema.purchase_has_ship_date():
         annotations["ship_date_value"] = Min("purchases__ship_date")
-    if _purchase_has_order_date():
+    if schema.purchase_has_order_date():
         annotations["order_date_value"] = Coalesce(
             Min("purchases__order_date"),
             purchase_date_min,
@@ -421,14 +372,14 @@ def item_list(request: HttpRequest) -> HttpResponse:
     order_date_value = _parse_date_filter(order_date_raw)
     if order_date_value:
         order_filters = Q(purchases__purchase_date=order_date_value)
-        if _purchase_has_order_date():
+        if schema.purchase_has_order_date():
             order_filters |= Q(purchases__order_date=order_date_value)
         queryset = queryset.filter(order_filters)
 
     ship_date_raw = request.GET.get("ship_date")
     ship_date_value = _parse_date_filter(ship_date_raw)
     if ship_date_value:
-        if _purchase_has_ship_date():
+        if schema.purchase_has_ship_date():
             queryset = queryset.filter(purchases__ship_date=ship_date_value)
         else:
             queryset = queryset.filter(purchases__purchase_date=ship_date_value)
@@ -543,18 +494,92 @@ def item_list(request: HttpRequest) -> HttpResponse:
     return render(request, "tracker/item_list.html", context)
 
 
+def _item_factions(item_id: int) -> List[str]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT f.name
+        FROM faction AS f
+        INNER JOIN character AS c ON c.faction_id = f.id
+        INNER JOIN itemcharacter AS ic ON ic.character_id = c.id
+        WHERE ic.item_id = %s AND f.name IS NOT NULL AND TRIM(f.name) != ''
+        ORDER BY LOWER(f.name), f.name
+        """,
+        [item_id],
+    )
+
+
+def _item_teams(item_id: int) -> List[str]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT t.name
+        FROM team AS t
+        INNER JOIN characterteam AS ct ON ct.team_id = t.id
+        INNER JOIN itemcharacter AS ic ON ic.character_id = ct.character_id
+        WHERE ic.item_id = %s AND t.name IS NOT NULL AND TRIM(t.name) != ''
+        ORDER BY LOWER(t.name), t.name
+        """,
+        [item_id],
+    )
+
+
+def _item_purchase_rows(item: Item) -> List[dict[str, Any]]:
+    rows: List[dict[str, Any]] = []
+    purchases = (
+        item.purchases.select_related("vendor", "collection__user")
+        .order_by("purchase_date", "order_date", "ship_date", "pk")
+    )
+    for purchase in purchases:
+        quantity = purchase.quantity or 1
+        price_component = (
+            (purchase.price or 0.0) * quantity if purchase.price is not None else None
+        )
+        components = [value for value in (price_component, purchase.tax, purchase.shipping) if value is not None]
+        total = sum(components) if components else None
+        owner_user = purchase.collection.user if purchase.collection else None
+        owner_name = None
+        if owner_user:
+            owner_name = owner_user.get_full_name() or owner_user.get_username()
+        rows.append(
+            {
+                "vendor": purchase.vendor.name if purchase.vendor else "",
+                "order_date": purchase.order_date,
+                "purchase_date": purchase.purchase_date,
+                "ship_date": purchase.ship_date,
+                "price": purchase.price,
+                "tax": purchase.tax,
+                "shipping": purchase.shipping,
+                "currency": purchase.currency,
+                "order_number": purchase.order_number,
+                "notes": purchase.notes,
+                "total": total,
+                "quantity": quantity,
+                "collection": purchase.collection.name if purchase.collection else "",
+                "owner": owner_name,
+            }
+        )
+    return rows
+
+
 def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     item = get_object_or_404(
         Item.objects.select_related("company", "line", "series", "type", "category"),
         pk=pk,
     )
+    character_rows = item.character_rows()
     characters = [
-        {"name": row["name"], "is_primary": row["is_primary"]}
-        for row in item.character_rows()
+        {
+            "name": row["name"],
+            "is_primary": row["is_primary"],
+            "role": row.get("role"),
+        }
+        for row in character_rows
     ]
     context = {
         "item": item,
         "characters": characters,
+        "factions": _item_factions(item.pk),
+        "teams": _item_teams(item.pk),
+        "purchases": _item_purchase_rows(item),
     }
     return render(request, "tracker/item_detail.html", context)
 

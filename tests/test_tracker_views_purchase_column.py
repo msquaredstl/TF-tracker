@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from django.db.utils import OperationalError, ProgrammingError
 
-from tracker import views
+from tracker import schema, views
 
 
 class _DummyCursor:
@@ -22,7 +22,7 @@ class _DummyCursor:
 
 
 def _install_table_description(monkeypatch, columns):
-    """Patch ``tracker.views`` introspection helpers for testing."""
+    """Patch schema introspection helpers for testing."""
 
     def fake_cursor():
         return _DummyCursor()
@@ -32,9 +32,9 @@ def _install_table_description(monkeypatch, columns):
             raise columns
         return [SimpleNamespace(name=name) for name in columns]
 
-    monkeypatch.setattr(views.connection, "cursor", fake_cursor, raising=False)
+    monkeypatch.setattr(schema.connection, "cursor", fake_cursor, raising=False)
     monkeypatch.setattr(
-        views.connection.introspection,
+        schema.connection.introspection,
         "get_table_description",
         fake_get_table_description,
         raising=False,
@@ -49,16 +49,16 @@ def _install_table_description(monkeypatch, columns):
     ],
 )
 def test_purchase_has_order_date_detects_column(monkeypatch, columns, expected):
-    views._purchase_column_names.cache_clear()
+    schema.table_column_names.cache_clear()
     _install_table_description(monkeypatch, columns)
-    assert views._purchase_has_order_date() is expected
+    assert schema.purchase_has_order_date() is expected
 
 
 @pytest.mark.parametrize("exc", [ProgrammingError("missing"), OperationalError("oops")])
 def test_purchase_has_order_date_missing_table(monkeypatch, exc):
-    views._purchase_column_names.cache_clear()
+    schema.table_column_names.cache_clear()
     _install_table_description(monkeypatch, exc)
-    assert views._purchase_has_order_date() is False
+    assert schema.purchase_has_order_date() is False
 
 
 @pytest.mark.parametrize(
@@ -69,14 +69,34 @@ def test_purchase_has_order_date_missing_table(monkeypatch, exc):
     ],
 )
 def test_purchase_has_ship_date_detects_column(monkeypatch, columns, expected):
-    views._purchase_column_names.cache_clear()
+    schema.table_column_names.cache_clear()
     _install_table_description(monkeypatch, columns)
-    assert views._purchase_has_ship_date() is expected
+    assert schema.purchase_has_ship_date() is expected
+
+
+@pytest.mark.parametrize(
+    "columns, expected",
+    [
+        (["id", "qty"], True),
+        (["id", "quantity"], True),
+        (["id", "price"], False),
+    ],
+)
+def test_purchase_has_quantity_detects_column(monkeypatch, columns, expected):
+    schema.table_column_names.cache_clear()
+    _install_table_description(monkeypatch, columns)
+    assert schema.purchase_has_quantity() is expected
+
+
+def test_purchase_has_collection_detects_column(monkeypatch):
+    schema.table_column_names.cache_clear()
+    _install_table_description(monkeypatch, ["id", "collection_id"])
+    assert schema.purchase_has_collection() is True
 
 
 def test_purchase_annotations_fall_back_to_purchase_date(monkeypatch):
-    monkeypatch.setattr(views, "_purchase_has_ship_date", lambda: False)
-    monkeypatch.setattr(views, "_purchase_has_order_date", lambda: False)
+    monkeypatch.setattr(schema, "purchase_has_ship_date", lambda: False)
+    monkeypatch.setattr(schema, "purchase_has_order_date", lambda: False)
 
     annotations = views._purchase_annotations()
 
@@ -88,8 +108,8 @@ def test_purchase_annotations_fall_back_to_purchase_date(monkeypatch):
 
 
 def test_purchase_annotations_include_ship_date_when_available(monkeypatch):
-    monkeypatch.setattr(views, "_purchase_has_ship_date", lambda: True)
-    monkeypatch.setattr(views, "_purchase_has_order_date", lambda: False)
+    monkeypatch.setattr(schema, "purchase_has_ship_date", lambda: True)
+    monkeypatch.setattr(schema, "purchase_has_order_date", lambda: False)
 
     annotations = views._purchase_annotations()
 

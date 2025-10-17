@@ -43,6 +43,8 @@ def test_purchase_fields_cover_sheet_attributes():
         "order_number",
         "notes",
         "vendor",
+        "quantity",
+        "collection",
     }
 
     assert expected_purchase_fields.issubset(purchase_field_names)

@@ -7,8 +7,18 @@ from typing import Dict, List, Optional
 from sqlmodel import Session, select
 from app.db.session import DEFAULT_SQLITE_URL, DB_URL, engine, init_db
 from app.models import (
-    Item, Company, Line, Series, ItemType, Category, Character, ItemCharacter,
-    Vendor, Purchase, Faction
+    Category,
+    Character,
+    Collection,
+    Company,
+    Faction,
+    Item,
+    ItemCharacter,
+    ItemType,
+    Line,
+    Purchase,
+    Series,
+    Vendor,
 )
 from app.utils import get_or_create, split_characters
 
@@ -32,6 +42,7 @@ DEFAULT_MAP = {
   "currency": ["currency"],
   "order_number": ["order","order number","order #"],
   "vendor": ["vendor","store","source","retailer","marketplace"],
+  "quantity": ["qty","quantity"],
   "condition": ["condition","state"],
   "status": ["status","owned/sold/preorder","owned","preorder","sold","wishlist"],
   "location": ["location","shelf","bin","box"],
@@ -126,6 +137,7 @@ def main():
         header_map = build_header_map(headers, user_map)
 
         count = 0
+        default_collection = session.exec(select(Collection).order_by(Collection.id)).first()
         for row in reader:
             def get(field: str):
                 h = header_map.get(field)
@@ -212,6 +224,9 @@ def main():
             shipping = to_float(get("shipping") or "")
             currency = (get("currency") or None)
             order_number = (get("order_number") or None)
+            quantity_raw = get("quantity") or ""
+            quantity = to_int(quantity_raw)
+            quantity = quantity if quantity and quantity > 0 else 1
             order_date = None
             order_raw = get("order_date")
             if order_raw:
@@ -229,7 +244,19 @@ def main():
 
             effective_order_date = order_date or purchase_date
 
-            if any([vendor, price, tax, shipping, currency, order_number, effective_order_date, ship_date]):
+            has_quantity_input = bool(quantity_raw and quantity_raw.strip())
+            if any(
+                [
+                    vendor,
+                    price,
+                    tax,
+                    shipping,
+                    currency,
+                    order_number,
+                    effective_order_date,
+                    ship_date,
+                ]
+            ) or has_quantity_input:
                 p = Purchase(
                     item_id=item.id,
                     vendor_id=vendor.id if vendor else None,
@@ -241,6 +268,8 @@ def main():
                     order_date=effective_order_date,
                     purchase_date=purchase_date,
                     ship_date=ship_date,
+                    quantity=quantity,
+                    collection_id=default_collection.id if default_collection else None,
                 )
                 session.add(p)
 

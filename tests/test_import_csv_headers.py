@@ -29,4 +29,5 @@ def test_sheet1_headers_map_to_known_fields():
     assert header_map["vendor"] == "Vendor"
     assert header_map["order_number"] == "Order #"
     assert header_map["price"] == "Price"
+    assert header_map["quantity"] == "Qty"
     assert header_map["notes"] == "notes"
