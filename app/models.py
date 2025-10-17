@@ -114,7 +114,9 @@ class Purchase(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     item_id: int = Field(foreign_key="item.id")
     vendor_id: Optional[int] = Field(default=None, foreign_key="vendor.id")
+    order_date: Optional[date] = Field(default=None, index=True)
     purchase_date: Optional[date] = None
+    ship_date: Optional[date] = Field(default=None, index=True)
     price: Optional[float] = None
     tax: Optional[float] = None
     shipping: Optional[float] = None

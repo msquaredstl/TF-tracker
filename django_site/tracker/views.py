@@ -4,13 +4,26 @@ from __future__ import annotations
 from typing import Any, Iterable, List, Mapping
 
 from django.db import connection, transaction
-from django.db.models import Q
+from django.db.models import Min, Q
+from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_date
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import ITEM_STATUS_CHOICES, ItemForm
-from .models import Category, Character, Company, Item, ItemType, Line, Series
+from .models import (
+    Category,
+    Character,
+    Company,
+    Faction,
+    Item,
+    ItemType,
+    Line,
+    Series,
+    Team,
+    Vendor,
+)
 
 
 def _clean_name(value: str | None) -> str | None:
@@ -65,6 +78,22 @@ def _split_characters(value: str | None) -> List[str]:
                 token = head + " |" + " |".join(tail)
         entries.append(token)
     return entries
+
+
+def _normalize_character_tokens(value: str | None) -> List[str]:
+    tokens: List[str] = []
+    for entry in _split_characters(value):
+        head = entry.split("|")[0].strip()
+        if head and head not in tokens:
+            tokens.append(head)
+    return tokens
+
+
+def _parse_date_filter(value: str | None):
+    if not value:
+        return None
+    parsed = parse_date(value)
+    return parsed
 
 
 def _sync_characters(item: Item, characters_raw: str | None) -> None:
@@ -173,7 +202,16 @@ def _save_item_from_form(data: Mapping[str, Any], *, instance: Item | None = Non
 
 def item_list(request: HttpRequest) -> HttpResponse:
     """List items with optional filtering that mirrors the FastAPI frontend."""
-    queryset = Item.objects.select_related("company", "line", "series", "type", "category")
+    queryset = (
+        Item.objects.select_related("company", "line", "series", "type", "category")
+        .annotate(
+            order_date_value=Coalesce(
+                Min("purchases__order_date"),
+                Min("purchases__purchase_date"),
+            ),
+            ship_date_value=Min("purchases__ship_date"),
+        )
+    )
 
     query = request.GET.get("q")
     if query:
@@ -191,10 +229,130 @@ def item_list(request: HttpRequest) -> HttpResponse:
     if company_name:
         queryset = queryset.filter(company__name=company_name)
 
-    items = queryset.order_by("name")
+    line_name = request.GET.get("line")
+    if line_name:
+        queryset = queryset.filter(line__name=line_name)
+
+    series_name = request.GET.get("series")
+    if series_name:
+        queryset = queryset.filter(series__name=series_name)
+
+    type_name = request.GET.get("type")
+    if type_name:
+        queryset = queryset.filter(type__name=type_name)
+
+    category_name = request.GET.get("category")
+    if category_name:
+        queryset = queryset.filter(category__name=category_name)
+
+    faction_name = request.GET.get("faction")
+    if faction_name:
+        queryset = queryset.filter(character_links__character__faction__name=faction_name)
+
+    team_name = request.GET.get("team")
+    if team_name:
+        queryset = queryset.filter(character_links__character__team_links__team__name=team_name)
+
+    vendor_name = request.GET.get("vendor")
+    if vendor_name:
+        queryset = queryset.filter(purchases__vendor__name=vendor_name)
+
+    characters_value = request.GET.get("characters")
+    active_characters = _normalize_character_tokens(characters_value)
+    for character_name in active_characters:
+        queryset = queryset.filter(character_links__character__name__iexact=character_name)
+
+    order_date_raw = request.GET.get("order_date")
+    order_date_value = _parse_date_filter(order_date_raw)
+    if order_date_value:
+        queryset = queryset.filter(
+            Q(purchases__order_date=order_date_value)
+            | Q(purchases__purchase_date=order_date_value)
+        )
+
+    ship_date_raw = request.GET.get("ship_date")
+    ship_date_value = _parse_date_filter(ship_date_raw)
+    if ship_date_value:
+        queryset = queryset.filter(purchases__ship_date=ship_date_value)
+
+    queryset = queryset.distinct()
+
+    order_sort = request.GET.get("order_sort")
+    ship_sort = request.GET.get("ship_sort")
+
+    order_by_fields: List[str] = []
+    if order_sort in {"asc", "desc"}:
+        field = "order_date_value"
+        if order_sort == "desc":
+            field = f"-{field}"
+        order_by_fields.append(field)
+    if ship_sort in {"asc", "desc"}:
+        field = "ship_date_value"
+        if ship_sort == "desc":
+            field = f"-{field}"
+        order_by_fields.append(field)
+    order_by_fields.append("name")
+
+    items = queryset.order_by(*order_by_fields)
 
     companies = (
         Company.objects.filter(items__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    lines = (
+        Line.objects.filter(items__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    series_options = (
+        Series.objects.filter(items__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    types = (
+        ItemType.objects.filter(items__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    categories = (
+        Category.objects.filter(items__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    factions = (
+        Faction.objects.filter(characters__item_links__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    teams = (
+        Team.objects.filter(character_links__character__item_links__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    vendors = (
+        Vendor.objects.filter(purchases__isnull=False)
+        .order_by("name")
+        .values_list("name", flat=True)
+        .distinct()
+    )
+
+    character_options = (
+        Character.objects.filter(item_links__isnull=False)
         .order_by("name")
         .values_list("name", flat=True)
         .distinct()
@@ -207,6 +365,37 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "status_choices": ITEM_STATUS_CHOICES,
         "companies": companies,
         "active_company": company_name or "",
+        "lines": lines,
+        "active_line": line_name or "",
+        "series_options": series_options,
+        "active_series": series_name or "",
+        "types": types,
+        "active_type": type_name or "",
+        "categories": categories,
+        "active_category": category_name or "",
+        "factions": factions,
+        "active_faction": faction_name or "",
+        "teams": teams,
+        "active_team": team_name or "",
+        "vendors": vendors,
+        "active_vendor": vendor_name or "",
+        "character_options": character_options,
+        "active_characters": active_characters,
+        "characters_csv": ", ".join(active_characters),
+        "order_date": order_date_raw or "",
+        "ship_date": ship_date_raw or "",
+        "order_sort": order_sort or "",
+        "ship_sort": ship_sort or "",
+        "order_sort_choices": (
+            ("", "Default"),
+            ("asc", "Oldest first"),
+            ("desc", "Newest first"),
+        ),
+        "ship_sort_choices": (
+            ("", "Default"),
+            ("asc", "Earliest ship first"),
+            ("desc", "Latest ship first"),
+        ),
     }
     return render(request, "tracker/item_list.html", context)
 

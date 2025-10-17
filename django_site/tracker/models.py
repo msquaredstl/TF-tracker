@@ -67,13 +67,92 @@ class Category(models.Model):
         return self.name
 
 
-class Character(models.Model):
+class Vendor(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255, unique=True)
 
     class Meta:
         managed = False
+        db_table = "vendor"
+
+    def __str__(self) -> str:  # pragma: no cover - convenience
+        return self.name
+
+
+class Faction(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        managed = False
+        db_table = "faction"
+
+    def __str__(self) -> str:  # pragma: no cover
+        return self.name
+
+
+class Team(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        managed = False
+        db_table = "team"
+
+    def __str__(self) -> str:  # pragma: no cover
+        return self.name
+
+
+class Character(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True)
+    faction = models.ForeignKey(
+        Faction,
+        related_name="characters",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="faction_id",
+    )
+
+    class Meta:
+        managed = False
         db_table = "character"
+
+    def __str__(self) -> str:  # pragma: no cover
+        return self.name
+
+
+class CharacterTeam(models.Model):
+    character = models.ForeignKey(
+        Character,
+        related_name="team_links",
+        on_delete=models.CASCADE,
+        db_column="character_id",
+    )
+    team = models.ForeignKey(
+        Team,
+        related_name="character_links",
+        on_delete=models.CASCADE,
+        db_column="team_id",
+    )
+
+    class Meta:
+        managed = False
+        db_table = "characterteam"
+        unique_together = ("character", "team")
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.character} ↔ {self.team}"
+
+
+class Tag(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True)
+
+    class Meta:
+        managed = False
+        db_table = "tag"
 
     def __str__(self) -> str:  # pragma: no cover
         return self.name
@@ -151,3 +230,83 @@ class Item(models.Model):
         return self.name
 
 
+class ItemCharacter(models.Model):
+    item = models.ForeignKey(
+        Item,
+        related_name="character_links",
+        on_delete=models.CASCADE,
+        db_column="item_id",
+    )
+    character = models.ForeignKey(
+        Character,
+        related_name="item_links",
+        on_delete=models.CASCADE,
+        db_column="character_id",
+    )
+    is_primary = models.BooleanField(default=False)
+    role = models.CharField(max_length=255, null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = "itemcharacter"
+        unique_together = ("item", "character")
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.item} ↔ {self.character}"
+
+
+class ItemTag(models.Model):
+    item = models.ForeignKey(
+        Item,
+        related_name="tag_links",
+        on_delete=models.CASCADE,
+        db_column="item_id",
+    )
+    tag = models.ForeignKey(
+        Tag,
+        related_name="item_links",
+        on_delete=models.CASCADE,
+        db_column="tag_id",
+    )
+
+    class Meta:
+        managed = False
+        db_table = "itemtag"
+        unique_together = ("item", "tag")
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"{self.item} ↔ {self.tag}"
+
+
+class Purchase(models.Model):
+    id = models.AutoField(primary_key=True)
+    item = models.ForeignKey(
+        Item,
+        related_name="purchases",
+        on_delete=models.CASCADE,
+        db_column="item_id",
+    )
+    vendor = models.ForeignKey(
+        Vendor,
+        related_name="purchases",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="vendor_id",
+    )
+    order_date = models.DateField(null=True, blank=True)
+    purchase_date = models.DateField(null=True, blank=True)
+    ship_date = models.DateField(null=True, blank=True)
+    price = models.FloatField(null=True, blank=True)
+    tax = models.FloatField(null=True, blank=True)
+    shipping = models.FloatField(null=True, blank=True)
+    currency = models.CharField(max_length=16, null=True, blank=True)
+    order_number = models.CharField(max_length=255, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = "purchase"
+
+    def __str__(self) -> str:  # pragma: no cover
+        return f"Purchase of {self.item}"
