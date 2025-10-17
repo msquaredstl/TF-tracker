@@ -344,8 +344,8 @@ class Purchase(models.Model):
 
 
 _PURCHASE_COLUMN_OPTIONS: dict[str, tuple[str, ...]] = {
-    "order_date": (Purchase._meta.get_field("order_date").column, "purchase_date"),
-    "ship_date": (Purchase._meta.get_field("ship_date").column, "purchase_date"),
+    "order_date": (Purchase._meta.get_field("order_date").column,),
+    "ship_date": (Purchase._meta.get_field("ship_date").column,),
     "quantity": (Purchase._meta.get_field("quantity").column, "quantity"),
     "collection": (Purchase._meta.get_field("collection").column,),
 }

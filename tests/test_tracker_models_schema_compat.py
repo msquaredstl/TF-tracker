@@ -1,7 +1,7 @@
 from tracker import models, schema
 
 
-def test_configure_schema_aliases_purchase_dates(monkeypatch):
+def test_configure_schema_keeps_purchase_date_columns(monkeypatch):
     purchase_table = models.Purchase._meta.db_table
 
     def fake_table_has_column(table, column):
@@ -15,8 +15,8 @@ def test_configure_schema_aliases_purchase_dates(monkeypatch):
     order_field = models.Purchase._meta.get_field("order_date")
     ship_field = models.Purchase._meta.get_field("ship_date")
 
-    assert order_field.column == "purchase_date"
-    assert ship_field.column == "purchase_date"
+    assert order_field.column == "order_date"
+    assert ship_field.column == "ship_date"
 
     monkeypatch.undo()
     models.configure_schema_compatibility(force=True)
