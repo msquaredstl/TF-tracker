@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Collection Overview</h2>
+{% if owner %}
+<p class="small text-muted">Displaying the collection for owner <strong>{{ owner }}</strong>. Update the owner filter once user accounts are available to switch between collections.</p>
+{% else %}
+<p class="small text-muted">Displaying the complete collection across all owners. Provide an <code>owner</code> query parameter to scope this page once user accounts are available.</p>
+{% endif %}
+
+<section class="stats">
+  <div class="stat-card">
+    <h3>Total items</h3>
+    <p class="stat-number">{{ total_items }}</p>
+  </div>
+  <div class="stat-card">
+    <h3>Status breakdown</h3>
+    {% if status_breakdown %}
+    <ul class="plain-list">
+      {% for status, count in status_breakdown %}
+      <li><strong>{{ status }}</strong>: {{ count }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No items to summarize yet.</p>
+    {% endif %}
+  </div>
+  <div class="stat-card">
+    <h3>Spending totals</h3>
+    {% if currency_breakdown %}
+    <ul class="plain-list">
+      {% for currency, total in currency_breakdown %}
+      <li>{{ currency }} {{ "%.2f"|format(total) }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No purchase data recorded.</p>
+    {% endif %}
+  </div>
+</section>
+
+<h3>Items</h3>
+<table class="table">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Company</th>
+      <th>Status</th>
+      <th>Purchase Date</th>
+      <th>Vendor</th>
+      <th>Price</th>
+      <th>Owner</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for item in item_rows %}
+    <tr>
+      <td><a href="/items/{{ item.id }}">{{ item.name }}</a></td>
+      <td>{{ item.company }}</td>
+      <td>{{ item.status }}</td>
+      <td>{{ item.purchase_date }}</td>
+      <td>{{ item.vendor }}</td>
+      <td>{{ item.price }}</td>
+      <td>{{ item.owner }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if not item_rows %}
+<p>No items found in the collection yet.</p>
+{% endif %}
+
+<section class="stats">
+  <div class="stat-card">
+    <h3>Companies represented</h3>
+    {% if company_breakdown %}
+    <ul class="plain-list">
+      {% for company, count in company_breakdown %}
+      <li><strong>{{ company }}</strong>: {{ count }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p>No companies to list.</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}
