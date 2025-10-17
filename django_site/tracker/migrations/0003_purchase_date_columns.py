@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from django.db import migrations
+from django.db import DatabaseError, migrations
 
 
-def _table_column_names(connection, table: str) -> set[str]:
-    with connection.cursor() as cursor:
-        description = connection.introspection.get_table_description(cursor, table)
+def _table_column_names(connection, table: str) -> set[str] | None:
+    try:
+        with connection.cursor() as cursor:
+            description = connection.introspection.get_table_description(cursor, table)
+    except DatabaseError:
+        return None
     return {
         getattr(col, "name", getattr(col, "column_name", "")).lower() for col in description
     }
@@ -14,6 +17,8 @@ def _table_column_names(connection, table: str) -> set[str]:
 def add_purchase_date_columns(apps, schema_editor) -> None:
     connection = schema_editor.connection
     existing_columns = _table_column_names(connection, "purchase")
+    if existing_columns is None:
+        return
     added_order = False
     added_ship = False
     with connection.cursor() as cursor:

@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 from django.conf import settings
-from django.db import migrations
+from django.core.exceptions import ImproperlyConfigured
+from django.db import DatabaseError, migrations
 
 
 def _table_column_names(connection, table):
-    with connection.cursor() as cursor:
-        description = connection.introspection.get_table_description(cursor, table)
+    try:
+        with connection.cursor() as cursor:
+            description = connection.introspection.get_table_description(cursor, table)
+    except DatabaseError:
+        return None
     return {
         getattr(col, "name", getattr(col, "column_name", "")).lower() for col in description
     }
@@ -15,6 +19,8 @@ def _table_column_names(connection, table):
 def add_purchase_columns(apps, schema_editor):
     connection = schema_editor.connection
     existing_columns = _table_column_names(connection, "purchase")
+    if existing_columns is None:
+        return
     with connection.cursor() as cursor:
         if "qty" not in existing_columns:
             cursor.execute("ALTER TABLE purchase ADD COLUMN qty INTEGER DEFAULT 1")
@@ -23,9 +29,20 @@ def add_purchase_columns(apps, schema_editor):
 
 
 def populate_purchase_defaults(apps, schema_editor):
-    UserModel = apps.get_model(*settings.AUTH_USER_MODEL.split("."))
+    connection = schema_editor.connection
+    existing_columns = _table_column_names(connection, "purchase")
+    if existing_columns is None:
+        return
+
+    try:
+        user_app_label, user_model_name = settings.AUTH_USER_MODEL.split(".")
+    except ValueError as exc:
+        raise ImproperlyConfigured(
+            "AUTH_USER_MODEL must be of the form 'app_label.ModelName'"
+        ) from exc
+
+    UserModel = apps.get_model(user_app_label, user_model_name)
     Collection = apps.get_model("tracker", "Collection")
-    Purchase = apps.get_model("tracker", "Purchase")
 
     user = UserModel.objects.order_by("pk").first()
     if not user:
@@ -40,8 +57,14 @@ def populate_purchase_defaults(apps, schema_editor):
         defaults={"name": f"{display_name}'s Collection"},
     )
 
-    Purchase.objects.filter(collection_id__isnull=True).update(collection_id=collection.pk)
-    Purchase.objects.filter(quantity__isnull=True).update(quantity=1)
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "UPDATE purchase SET collection_id = ? WHERE collection_id IS NULL",
+            [collection.pk],
+        )
+        cursor.execute(
+            "UPDATE purchase SET qty = 1 WHERE qty IS NULL OR qty = 0",
+        )
 
 
 class Migration(migrations.Migration):
