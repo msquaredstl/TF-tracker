@@ -1,51 +1,66 @@
-from typing import Optional, Dict, Any, List
-from sqlmodel import SQLModel, Field, Relationship, JSON
 from datetime import date
+from typing import Any, Dict, List, Optional
 
-class Company(SQLModel, table=True):
+from sqlalchemy import Column, ForeignKey, Integer
+from sqlmodel import JSON, Field, Relationship, SQLModel
+
+
+class BaseSQLModel(SQLModel):
+    __abstract__ = True
+    __table_args__ = {"extend_existing": True}
+
+class Company(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     lines: List["Line"] = Relationship(back_populates="company")
     items: List["Item"] = Relationship(back_populates="company")
 
-class Line(SQLModel, table=True):
+class Line(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     company_id: Optional[int] = Field(default=None, foreign_key="company.id")
     company: Optional[Company] = Relationship(back_populates="lines")
     items: List["Item"] = Relationship(back_populates="line")
 
-class Series(SQLModel, table=True):
+class Series(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     items: List["Item"] = Relationship(back_populates="series")
 
-class ItemType(SQLModel, table=True):
+class ItemType(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     items: List["Item"] = Relationship(back_populates="type")
 
-class Category(SQLModel, table=True):
+class Category(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     items: List["Item"] = Relationship(back_populates="category")
 
-class Vendor(SQLModel, table=True):
+class Vendor(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     purchases: List["Purchase"] = Relationship(back_populates="vendor")
 
-class Faction(SQLModel, table=True):
+
+class Collection(BaseSQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    user_id: Optional[int] = Field(default=None, index=True)
+    purchases: List["Purchase"] = Relationship(back_populates="collection")
+
+
+class Faction(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     characters: List["Character"] = Relationship(back_populates="faction")
 
-class Team(SQLModel, table=True):
+class Team(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     character_links: List["CharacterTeam"] = Relationship(back_populates="team")
 
-class Character(SQLModel, table=True):
+class Character(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     faction_id: Optional[int] = Field(default=None, foreign_key="faction.id")
@@ -55,24 +70,24 @@ class Character(SQLModel, table=True):
     team_links: List["CharacterTeam"] = Relationship(back_populates="character")
     item_links: List["ItemCharacter"] = Relationship(back_populates="character")
 
-class CharacterTeam(SQLModel, table=True):
+class CharacterTeam(BaseSQLModel, table=True):
     character_id: int = Field(foreign_key="character.id", primary_key=True)
     team_id: int = Field(foreign_key="team.id", primary_key=True)
     character: Character = Relationship(back_populates="team_links")
     team: Team = Relationship(back_populates="character_links")
 
-class Tag(SQLModel, table=True):
+class Tag(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     item_links: List["ItemTag"] = Relationship(back_populates="tag")
 
-class ItemTag(SQLModel, table=True):
+class ItemTag(BaseSQLModel, table=True):
     item_id: int = Field(foreign_key="item.id", primary_key=True)
     tag_id: int = Field(foreign_key="tag.id", primary_key=True)
     tag: Tag = Relationship(back_populates="item_links")
     item: "Item" = Relationship(back_populates="tag_links")
 
-class Item(SQLModel, table=True):
+class Item(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True)
     sku: Optional[str] = Field(default=None, index=True)
@@ -102,7 +117,7 @@ class Item(SQLModel, table=True):
     purchases: List["Purchase"] = Relationship(back_populates="item")
     tag_links: List[ItemTag] = Relationship(back_populates="item")
 
-class ItemCharacter(SQLModel, table=True):
+class ItemCharacter(BaseSQLModel, table=True):
     item_id: int = Field(foreign_key="item.id", primary_key=True)
     character_id: int = Field(foreign_key="character.id", primary_key=True)
     is_primary: bool = Field(default=False)
@@ -110,7 +125,7 @@ class ItemCharacter(SQLModel, table=True):
     item: Item = Relationship(back_populates="character_links")
     character: Character = Relationship(back_populates="item_links")
 
-class Purchase(SQLModel, table=True):
+class Purchase(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     item_id: int = Field(foreign_key="item.id")
     vendor_id: Optional[int] = Field(default=None, foreign_key="vendor.id")
@@ -123,6 +138,17 @@ class Purchase(SQLModel, table=True):
     currency: Optional[str] = None
     order_number: Optional[str] = None
     notes: Optional[str] = None
+    quantity: int = Field(default=1, sa_column=Column("qty", Integer, default=1))
+    collection_id: Optional[int] = Field(
+        default=None,
+        sa_column=Column(
+            "collection_id",
+            Integer,
+            ForeignKey("collection.id"),
+            nullable=True,
+        ),
+    )
 
     item: Item = Relationship(back_populates="purchases")
     vendor: Optional[Vendor] = Relationship(back_populates="purchases")
+    collection: Optional[Collection] = Relationship(back_populates="purchases")
