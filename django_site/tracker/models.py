@@ -1,6 +1,7 @@
 """Django ORM models that reuse the existing SQLModel tables."""
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import connection, models
 
 
@@ -79,6 +80,24 @@ class Vendor(models.Model):
         return self.name
 
 
+class Collection(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="collection",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "collection"
+
+    def __str__(self) -> str:  # pragma: no cover - convenience
+        return self.name
+
+
 class Faction(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255, unique=True)
@@ -124,6 +143,7 @@ class Character(models.Model):
 
 
 class CharacterTeam(models.Model):
+    id = models.AutoField(primary_key=True)
     character = models.ForeignKey(
         Character,
         related_name="team_links",
@@ -231,6 +251,7 @@ class Item(models.Model):
 
 
 class ItemCharacter(models.Model):
+    id = models.AutoField(primary_key=True)
     item = models.ForeignKey(
         Item,
         related_name="character_links",
@@ -256,6 +277,7 @@ class ItemCharacter(models.Model):
 
 
 class ItemTag(models.Model):
+    id = models.AutoField(primary_key=True)
     item = models.ForeignKey(
         Item,
         related_name="tag_links",
@@ -303,6 +325,15 @@ class Purchase(models.Model):
     currency = models.CharField(max_length=16, null=True, blank=True)
     order_number = models.CharField(max_length=255, null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
+    quantity = models.PositiveIntegerField(default=1, db_column="qty")
+    collection = models.ForeignKey(
+        Collection,
+        related_name="purchases",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        db_column="collection_id",
+    )
 
     class Meta:
         managed = False
@@ -310,3 +341,62 @@ class Purchase(models.Model):
 
     def __str__(self) -> str:  # pragma: no cover
         return f"Purchase of {self.item}"
+
+
+_PURCHASE_COLUMN_OPTIONS: dict[str, tuple[str, ...]] = {
+    "order_date": (Purchase._meta.get_field("order_date").column,),
+    "ship_date": (Purchase._meta.get_field("ship_date").column,),
+    "quantity": (Purchase._meta.get_field("quantity").column, "quantity"),
+    "collection": (Purchase._meta.get_field("collection").column,),
+}
+
+_JOIN_PK_DEFAULT_COLUMNS = {
+    CharacterTeam: CharacterTeam._meta.pk.column,
+    ItemCharacter: ItemCharacter._meta.pk.column,
+    ItemTag: ItemTag._meta.pk.column,
+}
+
+
+def configure_schema_compatibility(force: bool = False) -> None:
+    """Adapt ORM metadata to match the current legacy database schema."""
+
+    if not force and getattr(configure_schema_compatibility, "_configured", False):
+        return
+
+    from . import schema as _schema
+
+    if force:
+        _schema.table_column_names.cache_clear()
+    else:
+        _schema.clear_purchase_cache()
+
+    purchase_table = Purchase._meta.db_table
+
+    for field_name, column_options in _PURCHASE_COLUMN_OPTIONS.items():
+        field = Purchase._meta.get_field(field_name)
+        chosen_column = None
+        for candidate in column_options:
+            if _schema.table_has_column(purchase_table, candidate):
+                chosen_column = candidate
+                break
+        if chosen_column is None:
+            # Leave the field pointing at the first declared column even if it is
+            # missing so legacy databases surface a helpful OperationalError.
+            chosen_column = column_options[0]
+        field.column = chosen_column
+        field.db_column = chosen_column
+
+    for model, default_column in _JOIN_PK_DEFAULT_COLUMNS.items():
+        pk_field = model._meta.pk
+        column = (
+            default_column
+            if _schema.table_has_column(model._meta.db_table, default_column)
+            else "rowid"
+        )
+        pk_field.column = column
+        pk_field.db_column = column
+
+    configure_schema_compatibility._configured = True
+
+
+configure_schema_compatibility()
