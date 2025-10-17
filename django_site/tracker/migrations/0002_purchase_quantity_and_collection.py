@@ -48,13 +48,28 @@ def populate_purchase_defaults(apps, schema_editor):
     if not user:
         return
 
-    display_name = getattr(user, "get_full_name", lambda: "")()
+    full_name = getattr(user, "get_full_name", None)
+    if callable(full_name):
+        display_name = full_name() or ""
+    else:
+        display_name = ""
+
     if not display_name:
-        display_name = user.get_username()
+        username_getter = getattr(user, "get_username", None)
+        if callable(username_getter):
+            display_name = username_getter() or ""
+
+    if not display_name:
+        display_name = getattr(user, "username", "") or getattr(user, "email", "")
+
+    if display_name:
+        collection_name = f"{display_name}'s Collection"
+    else:
+        collection_name = f"Collection #{user.pk}"
 
     collection, _ = Collection.objects.get_or_create(
         user=user,
-        defaults={"name": f"{display_name}'s Collection"},
+        defaults={"name": collection_name},
     )
 
     with connection.cursor() as cursor:
