@@ -1,0 +1,9 @@
+-r requirements.txt
+
+# Development tools
+pre-commit>=3.7.0
+ruff>=0.6.9
+black>=24.8.0
+isort>=5.13.2
+pytest>=8.2.0
+pytest-cov>=5.0.0
