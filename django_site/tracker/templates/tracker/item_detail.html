@@ -25,6 +25,20 @@
   </div>
   <div><strong>Type:</strong> {{ item.type.name|default_if_none:"" }}</div>
   <div><strong>Category:</strong> {{ item.category.name|default_if_none:"" }}</div>
+  <div><strong>Factions:</strong>
+    {% if factions %}
+      {{ factions|join:", " }}
+    {% else %}
+      <em>None</em>
+    {% endif %}
+  </div>
+  <div><strong>Teams:</strong>
+    {% if teams %}
+      {{ teams|join:", " }}
+    {% else %}
+      <em>None</em>
+    {% endif %}
+  </div>
 
   <div class="full">
     <strong>Characters:</strong>
@@ -32,10 +46,81 @@
       <ul>
       {% for character in characters %}
         <li>
-          {{ character.name }}{% if character.is_primary %} <strong>(Primary)</strong>{% endif %}
+          {{ character.name }}
+          {% if character.role %}
+            <em>({{ character.role }})</em>
+          {% endif %}
+          {% if character.is_primary %}
+            <strong>(Primary)</strong>
+          {% endif %}
         </li>
       {% endfor %}
       </ul>
+    {% else %}
+      <em>None</em>
+    {% endif %}
+  </div>
+  <div class="full">
+    <strong>Purchases:</strong>
+    {% if purchases %}
+      <div class="table-wrapper">
+        <table class="detail-table">
+          <thead>
+            <tr>
+              <th>Vendor</th>
+              <th>Order #</th>
+              <th>Order Date</th>
+              <th>Purchase Date</th>
+              <th>Ship Date</th>
+              <th>Price</th>
+              <th>Qty</th>
+              <th>Tax</th>
+              <th>Shipping</th>
+              <th>Line Total</th>
+              <th>Currency</th>
+              <th>Collection</th>
+              <th>Owner</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for purchase in purchases %}
+              <tr>
+                <td>{{ purchase.vendor|default_if_none:"" }}</td>
+                <td>{{ purchase.order_number|default_if_none:"" }}</td>
+                <td>{{ purchase.order_date|date:"Y-m-d"|default_if_none:"" }}</td>
+                <td>{{ purchase.purchase_date|date:"Y-m-d"|default_if_none:"" }}</td>
+                <td>{{ purchase.ship_date|date:"Y-m-d"|default_if_none:"" }}</td>
+                <td>
+                  {% if purchase.price is not None %}
+                    {{ purchase.price|floatformat:2 }}
+                  {% endif %}
+                </td>
+                <td>{{ purchase.quantity }}</td>
+                <td>
+                  {% if purchase.tax is not None %}
+                    {{ purchase.tax|floatformat:2 }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if purchase.shipping is not None %}
+                    {{ purchase.shipping|floatformat:2 }}
+                  {% endif %}
+                </td>
+                <td>
+                  {% if purchase.total is not None %}
+                    {{ purchase.total|floatformat:2 }}
+                  {% endif %}
+                </td>
+                <td>{{ purchase.currency|default_if_none:"" }}</td>
+                <td>{{ purchase.collection|default_if_none:"" }}</td>
+                <td>{{ purchase.owner|default_if_none:"" }}</td>
+                <td>{{ purchase.notes|default_if_none:"" }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
       <em>None</em>
     {% endif %}
