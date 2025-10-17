@@ -84,6 +84,7 @@ They apply to all contributors — human or AI — working within this repositor
 - Seed scripts must be **idempotent** — re-running should not create duplicates or inconsistent state.
 - Place reusable import or setup logic in `scripts/` and ensure it can run in any environment (dev, staging, prod).
 - If migrations introduce breaking changes, include clear upgrade instructions in your PR description.
+- Reflect any model or relationship changes in the Mermaid ER diagram at [`schema.mmd`](./schema.mmd); regenerate exported assets if you maintain them separately.
 
 ---
 
