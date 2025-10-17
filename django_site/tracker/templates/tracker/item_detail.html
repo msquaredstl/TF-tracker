@@ -1,54 +1,50 @@
 {% extends "tracker/base.html" %}
-{% block title %}{{ item.name }} — TF Tracker (Django){% endblock %}
+{% block title %}{{ item.name }} — TF Tracker{% endblock %}
 {% block content %}
-<a href="{% url 'tracker:item-list' %}" class="btn secondary">Back to list</a>
-<section class="card">
-  <h2>{{ item.name }}</h2>
-  <dl>
-    <dt>SKU</dt>
-    <dd>{{ item.sku|default_if_none:"" }}</dd>
-    <dt>Version</dt>
-    <dd>{{ item.version|default_if_none:"" }}</dd>
-    <dt>Year</dt>
-    <dd>{{ item.year|default_if_none:"" }}</dd>
-    <dt>Company</dt>
-    <dd>{{ item.company.name|default_if_none:"" }}</dd>
-    <dt>Line</dt>
-    <dd>{{ item.line.name|default_if_none:"" }}</dd>
-    <dt>Series</dt>
-    <dd>{{ item.series.name|default_if_none:"" }}</dd>
-    <dt>Type</dt>
-    <dd>{{ item.type.name|default_if_none:"" }}</dd>
-    <dt>Category</dt>
-    <dd>{{ item.category.name|default_if_none:"" }}</dd>
-    <dt>Status</dt>
-    <dd>{{ item.status|default_if_none:"" }}</dd>
-    <dt>Location</dt>
-    <dd>{{ item.location|default_if_none:"" }}</dd>
-    <dt>URL</dt>
-    <dd>
-      {% if item.url %}
-        <a href="{{ item.url }}" target="_blank" rel="noopener">{{ item.url }}</a>
-      {% endif %}
-    </dd>
-    <dt>Notes</dt>
-    <dd>{{ item.notes|default_if_none:"" }}</dd>
-    <dt>Primary Character</dt>
-    <dd>{{ item.primary_character.name|default_if_none:"" }}</dd>
-    <dt>All Characters</dt>
-    <dd>
-      {% if characters %}
-        <ul>
-        {% for character in characters %}
-          <li>
-            {{ character.name }}{% if character.is_primary %} <strong>(Primary)</strong>{% endif %}
-          </li>
-        {% endfor %}
-        </ul>
-      {% else %}
-        None listed.
-      {% endif %}
-    </dd>
-  </dl>
-</section>
+<div class="actions">
+  <a href="{% url 'tracker:item-list' %}" class="btn secondary">Back</a>
+  <a href="{% url 'tracker:item-edit' item.pk %}" class="btn">Edit</a>
+</div>
+
+<h2>{{ item.name }}</h2>
+<div class="detail-grid">
+  <div><strong>Company:</strong> {{ item.company.name|default_if_none:"" }}</div>
+  <div><strong>Line:</strong> {{ item.line.name|default_if_none:"" }}</div>
+  <div><strong>Series:</strong> {{ item.series.name|default_if_none:"" }}</div>
+  <div><strong>SKU:</strong> {{ item.sku|default_if_none:"" }}</div>
+  <div><strong>Version:</strong> {{ item.version|default_if_none:"" }}</div>
+  <div><strong>Year:</strong> {{ item.year|default_if_none:"" }}</div>
+  <div><strong>Scale:</strong> {{ item.scale|default_if_none:"" }}</div>
+  <div><strong>Condition:</strong> {{ item.condition|default_if_none:"" }}</div>
+  <div><strong>Status:</strong> {{ item.status|default_if_none:"" }}</div>
+  <div><strong>Location:</strong> {{ item.location|default_if_none:"" }}</div>
+  <div><strong>URL:</strong>
+    {% if item.url %}
+      <a href="{{ item.url }}" target="_blank" rel="noopener">Link</a>
+    {% endif %}
+  </div>
+  <div><strong>Type:</strong> {{ item.type.name|default_if_none:"" }}</div>
+  <div><strong>Category:</strong> {{ item.category.name|default_if_none:"" }}</div>
+
+  <div class="full">
+    <strong>Characters:</strong>
+    {% if characters %}
+      <ul>
+      {% for character in characters %}
+        <li>
+          {{ character.name }}{% if character.is_primary %} <strong>(Primary)</strong>{% endif %}
+        </li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <em>None</em>
+    {% endif %}
+  </div>
+  <div class="full"><strong>Notes:</strong> {{ item.notes|default_if_none:"" }}</div>
+</div>
+
+<form method="post" action="{% url 'tracker:item-delete' item.pk %}" onsubmit="return confirm('Delete this item?');">
+  {% csrf_token %}
+  <button class="btn danger" type="submit">Delete</button>
+</form>
 {% endblock %}
