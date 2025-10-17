@@ -1,0 +1,98 @@
+{% extends "tracker/base.html" %}
+{% block title %}{% if item %}Edit {{ item.name }}{% else %}Add Item{% endif %} — TF Tracker{% endblock %}
+{% block content %}
+<h2>{% if item %}Edit {{ item.name }}{% else %}Add Item{% endif %}</h2>
+<form method="post" action="{{ form_action }}" class="form-grid">
+  {% csrf_token %}
+  {% if form.non_field_errors %}
+    <div class="form-errors">
+      {% for error in form.non_field_errors %}
+        <p>{{ error }}</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <label>Name
+    {{ form.name }}
+    {% include "tracker/_field_errors.html" with field=form.name %}
+  </label>
+  <label>SKU
+    {{ form.sku }}
+    {% include "tracker/_field_errors.html" with field=form.sku %}
+  </label>
+  <label>Version
+    {{ form.version }}
+    {% include "tracker/_field_errors.html" with field=form.version %}
+  </label>
+  <label>Year
+    {{ form.year }}
+    {% include "tracker/_field_errors.html" with field=form.year %}
+  </label>
+  <label>Scale
+    {{ form.scale }}
+    {% include "tracker/_field_errors.html" with field=form.scale %}
+  </label>
+  <label>Condition
+    {{ form.condition }}
+    {% include "tracker/_field_errors.html" with field=form.condition %}
+  </label>
+  <label>Status
+    {{ form.status }}
+    {% include "tracker/_field_errors.html" with field=form.status %}
+  </label>
+  <label>Location
+    {{ form.location }}
+    {% include "tracker/_field_errors.html" with field=form.location %}
+  </label>
+  <label>URL
+    {{ form.url }}
+    {% include "tracker/_field_errors.html" with field=form.url %}
+  </label>
+  <label class="full">Notes
+    {{ form.notes }}
+    {% include "tracker/_field_errors.html" with field=form.notes %}
+  </label>
+
+  <label>Company
+    {{ form.company_name }}
+    {% include "tracker/_field_errors.html" with field=form.company_name %}
+  </label>
+  <label>Line
+    {{ form.line_name }}
+    {% include "tracker/_field_errors.html" with field=form.line_name %}
+  </label>
+  <label>Series
+    {{ form.series_name }}
+    {% include "tracker/_field_errors.html" with field=form.series_name %}
+  </label>
+  <label>Type
+    {{ form.type_name }}
+    {% include "tracker/_field_errors.html" with field=form.type_name %}
+  </label>
+  <label>Category
+    {{ form.category_name }}
+    {% include "tracker/_field_errors.html" with field=form.category_name %}
+  </label>
+
+  <label class="full">Characters (comma- or semicolon-separated; add "|primary" after one name)
+    {{ form.characters }}
+    {% include "tracker/_field_errors.html" with field=form.characters %}
+  </label>
+
+  <div class="actions full">
+    <button class="btn" type="submit">{% if item %}Save{% else %}Create{% endif %}</button>
+    {% if item %}
+      <a class="btn secondary" href="{% url 'tracker:item-detail' item.pk %}">Cancel</a>
+    {% else %}
+      <a class="btn secondary" href="{% url 'tracker:item-list' %}">Cancel</a>
+    {% endif %}
+  </div>
+</form>
+
+{% if item %}
+<form method="post" action="{% url 'tracker:item-delete' item.pk %}" onsubmit="return confirm('Delete this item?');">
+  {% csrf_token %}
+  <button class="btn danger" type="submit">Delete</button>
+</form>
+{% endif %}
+{% endblock %}

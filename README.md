@@ -1,4 +1,4 @@
-# Transformers Collection Tracker — Complete
+# Transformers Collection Tracker
 
 Normalized FastAPI + SQLModel + SQLite app with importers and seeders, plus your attribute CSVs.
 
@@ -14,6 +14,14 @@ uvicorn app.main:app --reload
 ```
 
 > Need to confirm a set of credentials before updating `.env`? Run `python -m app.db.session --check-connection --url "mysql+pymysql://username:password@host:3306/database"` to validate connectivity on demand.
+
+## Web pages
+
+Once the development server is running you can browse the following pages:
+
+- `/` — search and browse all items that have been entered.
+- `/imports` — review everything that has been imported from your CSV data in a tabular view.
+- `/collection` — see the complete collection with status, company, and purchase summaries. Pass `?owner=<identifier>` to scope the page to a specific owner once you start attaching ownership metadata to items.
 
 ## Seed data
 ### Option A — YAML (from `seeds/seed.yaml`)
@@ -32,6 +40,26 @@ python -m app.importers.import_csv /path/to/your/Sheet1.csv
 ```
 
 Notes:
+- Configure your remote database credentials in `.env` first; the importer will
+  refuse to run against the local SQLite fallback unless you pass
+  `--allow-sqlite`.
 - Characters field supports comma/semicolon; add `|primary` after one name.
 - Lines auto-link to Companies when both names are present.
 - All seeders/importers are idempotent (safe to re-run).
+
+## Django frontend/backend
+Run the Django project located under `django_site/` if you prefer a traditional Django stack
+that shares the same SQLite/SQLModel database. Install the dependencies from the repository
+root first (they include Django), then launch the development server:
+
+```bash
+pip install -r requirements.txt  # from the repo root; reinstall if you pulled new code
+cd django_site
+python manage.py runserver
+# open http://127.0.0.1:8000
+```
+
+The Django models reuse the existing tables, so your data stays in sync regardless of whether
+you use the FastAPI or Django entry points. The Django site mirrors the FastAPI pages: filter
+and browse your collection, open rich detail views, and add/update/delete items directly from
+the web UI.

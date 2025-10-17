@@ -1,13 +1,26 @@
-from fastapi import FastAPI, Depends, Request, Form
+from collections import Counter, defaultdict
+from typing import Dict, List, Optional
+
+from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlmodel import select, Session
-from typing import Optional, List
+from sqlalchemy.orm import selectinload
+from sqlmodel import Session, select
 
 from .db.session import init_db, get_session
-from .models import Item, Company, Line, Series, ItemType, Category, Character, ItemCharacter
-from .utils import get_or_create
+from .models import (
+    Category,
+    Character,
+    Company,
+    Item,
+    ItemCharacter,
+    ItemType,
+    Line,
+    Purchase,
+    Series,
+)
+from .utils import get_or_create, split_characters
 
 app = FastAPI(title="Transformers Collection Tracker — Complete")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -35,6 +48,109 @@ def home(request: Request, q: Optional[str] = None, status: Optional[str] = None
     companies = sorted(set([c for c in companies if c]))
     return templates.TemplateResponse("items_list.html", {"request": request, "items": items, "q": q or "", "status": status or "", "companies": companies, "active_company": company or ""})
 
+
+@app.get("/imports", response_class=HTMLResponse)
+def imported_items(request: Request, session: Session = Depends(get_session)):
+    items = session.exec(select(Item).order_by(Item.name.asc())).all()
+    return templates.TemplateResponse(
+        "imported_items.html", {"request": request, "items": items}
+    )
+
+
+@app.get("/collection", response_class=HTMLResponse)
+def collection_overview(
+    request: Request,
+    owner: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
+    stmt = (
+        select(Item)
+        .options(
+            selectinload(Item.company),
+            selectinload(Item.purchases).selectinload(Purchase.vendor),
+        )
+        .order_by(Item.name.asc())
+    )
+    items = session.exec(stmt).unique().all()
+
+    item_rows: List[Dict[str, Optional[str]]] = []
+    status_counter: Counter[str] = Counter()
+    company_counter: Counter[str] = Counter()
+    currency_totals = defaultdict(float)
+
+    for item in items:
+        owner_id = None
+        if isinstance(item.extra, dict):
+            owner_raw = item.extra.get("owner_id")
+            if owner_raw is not None:
+                owner_id = str(owner_raw)
+
+        if owner and owner_id != owner:
+            continue
+
+        company_name = item.company.name if item.company else "Unbranded"
+        status_value = item.status or "Unknown"
+        status_counter[status_value] += 1
+        company_counter[company_name] += 1
+
+        primary_purchase = item.purchases[0] if item.purchases else None
+        price_display = ""
+        purchase_date = ""
+        vendor_name = ""
+        if primary_purchase:
+            purchase_date = (
+                primary_purchase.purchase_date.isoformat()
+                if primary_purchase.purchase_date
+                else ""
+            )
+            vendor_name = primary_purchase.vendor.name if primary_purchase.vendor else ""
+            if primary_purchase.price is not None:
+                currency = primary_purchase.currency or "USD"
+                price_display = f"{currency} {primary_purchase.price:0.2f}"
+
+        for purchase in item.purchases:
+            if purchase.price is None:
+                continue
+            currency = purchase.currency or "USD"
+            currency_totals[currency] += purchase.price
+
+        item_rows.append(
+            {
+                "id": str(item.id) if item.id is not None else "",
+                "name": item.name,
+                "company": company_name,
+                "status": status_value,
+                "purchase_date": purchase_date,
+                "vendor": vendor_name,
+                "price": price_display,
+                "owner": owner_id or "—",
+            }
+        )
+
+    status_breakdown = sorted(
+        status_counter.items(), key=lambda pair: (-pair[1], pair[0])
+    )
+    company_breakdown = sorted(
+        company_counter.items(), key=lambda pair: (-pair[1], pair[0])
+    )
+    currency_breakdown = [
+        (currency, total)
+        for currency, total in sorted(currency_totals.items(), key=lambda pair: pair[0])
+    ]
+
+    return templates.TemplateResponse(
+        "collection_overview.html",
+        {
+            "request": request,
+            "owner": owner,
+            "item_rows": item_rows,
+            "total_items": len(item_rows),
+            "status_breakdown": status_breakdown,
+            "company_breakdown": company_breakdown,
+            "currency_breakdown": currency_breakdown,
+        },
+    )
+
 @app.get("/items/new", response_class=HTMLResponse)
 def new_item_form(request: Request):
     return templates.TemplateResponse("item_form.html", {"request": request, "item": None})
@@ -44,7 +160,7 @@ def _sync_characters(session: Session, item: Item, characters_csv: Optional[str]
         session.delete(link)
     if not characters_csv:
         return
-    entries = [e.strip() for e in characters_csv.split(",") if e.strip()]
+    entries = split_characters(characters_csv)
     primary_set = False
     for idx, e in enumerate(entries):
         name = e

@@ -6,12 +6,12 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
-from app.db.session import engine, init_db
+from app.db.session import DEFAULT_SQLITE_URL, DB_URL, engine, init_db
 from app.models import (
     Item, Company, Line, Series, ItemType, Category, Character, ItemCharacter,
     Vendor, Purchase, Faction
 )
-from app.utils import get_or_create
+from app.utils import get_or_create, split_characters
 
 DEFAULT_MAP = {
   "name": ["name","figure","character","title"],
@@ -23,7 +23,9 @@ DEFAULT_MAP = {
   "sku": ["sku","code","id","figure id"],
   "version": ["version","release","variant"],
   "year": ["year","release year"],
+  "order_date": ["order date","ordered"],
   "purchase_date": ["purchase date","bought","date"],
+  "ship_date": ["ship date","shipped"],
   "price": ["price","paid","cost"],
   "tax": ["tax","sales tax"],
   "shipping": ["shipping","postage"],
@@ -86,18 +88,23 @@ def to_int(val: str) -> Optional[int]:
     except Exception:
         return None
 
-def split_characters(s: Optional[str]):
-    if not s: return []
-    parts = []
-    for token in s.replace(";","\n").replace(",","\n").split("\n"):
-        t = token.strip()
-        if t: parts.append(t)
-    return parts
+def ensure_database_target(db_url: str, allow_sqlite: bool) -> None:
+    if not allow_sqlite and db_url == DEFAULT_SQLITE_URL:
+        raise SystemExit(
+            "Refusing to import into the local SQLite fallback. "
+            "Set remote database credentials or pass --allow-sqlite to proceed."
+        )
+
 
 def main():
     parser = argparse.ArgumentParser(description="Import a CSV export into normalized tables.")
     parser.add_argument("csv_path", help="Path to the CSV file (exported from Google Sheets).")
     parser.add_argument("--map", dest="mapfile", help="Optional JSON mapping overrides.", default=None)
+    parser.add_argument(
+        "--allow-sqlite",
+        action="store_true",
+        help="Permit importing into the local SQLite fallback database.",
+    )
     args = parser.parse_args()
 
     csv_path = Path(args.csv_path)
@@ -108,6 +115,8 @@ def main():
     if args.mapfile:
         with open(args.mapfile, "r", encoding="utf-8") as f:
             user_map = json.load(f)
+
+    ensure_database_target(DB_URL, args.allow_sqlite)
 
     init_db()
 
@@ -192,18 +201,35 @@ def main():
             shipping = to_float(get("shipping") or "")
             currency = (get("currency") or None)
             order_number = (get("order_number") or None)
+            order_date = None
+            order_raw = get("order_date")
+            if order_raw:
+                order_date = parse_date(order_raw)
+
             purchase_date = None
             pd_raw = get("purchase_date")
             if pd_raw:
                 purchase_date = parse_date(pd_raw)
 
-            if any([vendor, price, tax, shipping, currency, order_number, purchase_date]):
+            ship_date = None
+            ship_raw = get("ship_date")
+            if ship_raw:
+                ship_date = parse_date(ship_raw)
+
+            effective_order_date = order_date or purchase_date
+
+            if any([vendor, price, tax, shipping, currency, order_number, effective_order_date, ship_date]):
                 p = Purchase(
                     item_id=item.id,
                     vendor_id=vendor.id if vendor else None,
-                    price=price, tax=tax, shipping=shipping,
-                    currency=currency, order_number=order_number,
-                    purchase_date=purchase_date
+                    price=price,
+                    tax=tax,
+                    shipping=shipping,
+                    currency=currency,
+                    order_number=order_number,
+                    order_date=effective_order_date,
+                    purchase_date=purchase_date,
+                    ship_date=ship_date,
                 )
                 session.add(p)
 
