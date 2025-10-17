@@ -1,0 +1,17 @@
+name: Lint & Test
+on: [push, pull_request]
+
+jobs:
+  lint-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -U pip
+      - run: pip install ruff isort black pytest pytest-cov
+      - run: ruff . --fix --exit-non-zero-on-fix
+      - run: isort . --check-only
+      - run: black . --check
+      - run: pytest --cov=app --maxfail=1
