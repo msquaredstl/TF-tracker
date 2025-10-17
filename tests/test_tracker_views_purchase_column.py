@@ -49,13 +49,50 @@ def _install_table_description(monkeypatch, columns):
     ],
 )
 def test_purchase_has_order_date_detects_column(monkeypatch, columns, expected):
-    views._purchase_has_order_date.cache_clear()
+    views._purchase_column_names.cache_clear()
     _install_table_description(monkeypatch, columns)
     assert views._purchase_has_order_date() is expected
 
 
 @pytest.mark.parametrize("exc", [ProgrammingError("missing"), OperationalError("oops")])
 def test_purchase_has_order_date_missing_table(monkeypatch, exc):
-    views._purchase_has_order_date.cache_clear()
+    views._purchase_column_names.cache_clear()
     _install_table_description(monkeypatch, exc)
     assert views._purchase_has_order_date() is False
+
+
+@pytest.mark.parametrize(
+    "columns, expected",
+    [
+        (["id", "ship_date", "purchase_date"], True),
+        (["id", "purchase_date", "order_date"], False),
+    ],
+)
+def test_purchase_has_ship_date_detects_column(monkeypatch, columns, expected):
+    views._purchase_column_names.cache_clear()
+    _install_table_description(monkeypatch, columns)
+    assert views._purchase_has_ship_date() is expected
+
+
+def test_purchase_annotations_fall_back_to_purchase_date(monkeypatch):
+    monkeypatch.setattr(views, "_purchase_has_ship_date", lambda: False)
+    monkeypatch.setattr(views, "_purchase_has_order_date", lambda: False)
+
+    annotations = views._purchase_annotations()
+
+    ship_expr = annotations["ship_date_value"]
+    order_expr = annotations["order_date_value"]
+
+    assert ship_expr is order_expr
+    assert ship_expr.source_expressions[0].name == "purchases__purchase_date"
+
+
+def test_purchase_annotations_include_ship_date_when_available(monkeypatch):
+    monkeypatch.setattr(views, "_purchase_has_ship_date", lambda: True)
+    monkeypatch.setattr(views, "_purchase_has_order_date", lambda: False)
+
+    annotations = views._purchase_annotations()
+
+    ship_expr = annotations["ship_date_value"]
+
+    assert ship_expr.source_expressions[0].name == "purchases__ship_date"

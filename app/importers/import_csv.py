@@ -1,8 +1,7 @@
-import csv
 import argparse
+import csv
 import json
 from pathlib import Path
-from datetime import datetime
 from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
@@ -23,6 +22,7 @@ DEFAULT_MAP = {
   "sku": ["sku","code","id","figure id"],
   "version": ["version","release","variant"],
   "year": ["year","release year"],
+  "primary_character": ["character","primary character","main character"],
   "order_date": ["order date","ordered"],
   "purchase_date": ["purchase date","bought","date"],
   "ship_date": ["ship date","shipped"],
@@ -30,7 +30,7 @@ DEFAULT_MAP = {
   "tax": ["tax","sales tax"],
   "shipping": ["shipping","postage"],
   "currency": ["currency"],
-  "order_number": ["order","order number"],
+  "order_number": ["order","order number","order #"],
   "vendor": ["vendor","store","source","retailer","marketplace"],
   "condition": ["condition","state"],
   "status": ["status","owned/sold/preorder","owned","preorder","sold","wishlist"],
@@ -139,7 +139,8 @@ def main():
             line = get_or_create(session, Line, get("line"))
             if line and company and line.company_id is None:
                 line.company_id = company.id
-                session.add(line); session.commit()
+                session.add(line)
+                session.commit()
 
             series = get_or_create(session, Series, get("series"))
             type_ = get_or_create(session, ItemType, get("type"))
@@ -162,10 +163,19 @@ def main():
                 type_id=type_.id if type_ else None,
                 category_id=category.id if category else None,
             )
-            session.add(item); session.commit(); session.refresh(item)
+            session.add(item)
+            session.commit()
+            session.refresh(item)
 
             # characters
-            chars = split_characters(get("characters"))
+            character_chunks = []
+            primary_character = get("primary_character")
+            if primary_character:
+                character_chunks.append(primary_character)
+            additional_characters = get("characters")
+            if additional_characters:
+                character_chunks.append(additional_characters)
+            chars = split_characters("\n".join(character_chunks))
             faction_hint = get("faction")
             faction_obj = get_or_create(session, Faction, faction_hint) if faction_hint else None
 
@@ -180,7 +190,8 @@ def main():
                 ch = get_or_create(session, Character, nm)
                 if faction_obj and ch and ch.faction_id is None:
                     ch.faction_id = faction_obj.id
-                    session.add(ch); session.commit()
+                    session.add(ch)
+                    session.commit()
                 link = ItemCharacter(item_id=item.id, character_id=ch.id, is_primary=is_primary)
                 if is_primary:
                     primary_set = True

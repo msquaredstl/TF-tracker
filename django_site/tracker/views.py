@@ -107,8 +107,8 @@ def _fetch_scalar_list(sql: str, params: Sequence[Any] | None = None) -> List[An
 
 
 @lru_cache(maxsize=1)
-def _purchase_has_order_date() -> bool:
-    """Return True when the ``purchase`` table exposes an ``order_date`` column."""
+def _purchase_column_names() -> frozenset[str]:
+    """Return the normalized column names exposed by the ``purchase`` table."""
 
     table_name = Purchase._meta.db_table
     try:
@@ -117,13 +117,50 @@ def _purchase_has_order_date() -> bool:
                 cursor, table_name
             )
     except (ProgrammingError, OperationalError):
-        return False
+        return frozenset()
 
+    names: set[str] = set()
     for column in description:
         name = getattr(column, "name", "")
-        if name and name.lower() == "order_date":
-            return True
-    return False
+        if not name and hasattr(column, "column_name"):
+            name = getattr(column, "column_name")  # pragma: no cover - safety net
+        if name:
+            names.add(name.lower())
+    return frozenset(names)
+
+
+def _purchase_has_column(column_name: str) -> bool:
+    return column_name.lower() in _purchase_column_names()
+
+
+def _purchase_has_order_date() -> bool:
+    """Return True when the ``purchase`` table exposes an ``order_date`` column."""
+
+    return _purchase_has_column("order_date")
+
+
+def _purchase_has_ship_date() -> bool:
+    """Return True when the ``purchase`` table exposes a ``ship_date`` column."""
+
+    return _purchase_has_column("ship_date")
+
+
+def _purchase_annotations() -> dict[str, Any]:
+    """Return annotations used by :func:`item_list` for purchase metadata."""
+
+    purchase_date_min = Min("purchases__purchase_date")
+    annotations: dict[str, Any] = {
+        "ship_date_value": purchase_date_min,
+        "order_date_value": purchase_date_min,
+    }
+    if _purchase_has_ship_date():
+        annotations["ship_date_value"] = Min("purchases__ship_date")
+    if _purchase_has_order_date():
+        annotations["order_date_value"] = Coalesce(
+            Min("purchases__order_date"),
+            purchase_date_min,
+        )
+    return annotations
 
 
 def _item_ids_for_faction(name: str) -> List[int]:
@@ -323,17 +360,7 @@ def _save_item_from_form(
 
 def item_list(request: HttpRequest) -> HttpResponse:
     """List items with optional filtering that mirrors the FastAPI frontend."""
-    purchase_date_min = Min("purchases__purchase_date")
-    annotations: dict[str, Any] = {
-        "ship_date_value": Min("purchases__ship_date"),
-    }
-    if _purchase_has_order_date():
-        annotations["order_date_value"] = Coalesce(
-            Min("purchases__order_date"),
-            purchase_date_min,
-        )
-    else:
-        annotations["order_date_value"] = purchase_date_min
+    annotations = _purchase_annotations()
 
     queryset = Item.objects.select_related(
         "company", "line", "series", "type", "category"
@@ -401,7 +428,10 @@ def item_list(request: HttpRequest) -> HttpResponse:
     ship_date_raw = request.GET.get("ship_date")
     ship_date_value = _parse_date_filter(ship_date_raw)
     if ship_date_value:
-        queryset = queryset.filter(purchases__ship_date=ship_date_value)
+        if _purchase_has_ship_date():
+            queryset = queryset.filter(purchases__ship_date=ship_date_value)
+        else:
+            queryset = queryset.filter(purchases__purchase_date=ship_date_value)
 
     queryset = queryset.distinct()
 
