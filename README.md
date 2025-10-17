@@ -15,6 +15,16 @@ uvicorn app.main:app --reload
 
 > Need to confirm a set of credentials before updating `.env`? Run `python -m app.db.session --check-connection --url "mysql+pymysql://username:password@host:3306/database"` to validate connectivity on demand.
 
+## Database schema
+
+An entity-relationship diagram describing the shared database tables lives in [`schema.mmd`](./schema.mmd). GitHub renders the Mermaid definition directly in the repository view, and you can export an image locally with the Mermaid CLI:
+
+```bash
+npx @mermaid-js/mermaid-cli -i schema.mmd -o schema.svg
+```
+
+The diagram mirrors the SQLModel tables used by both the FastAPI service and the Django site, so keep it in sync when you add or adjust models.
+
 ## Web pages
 
 Once the development server is running you can browse the following pages:
