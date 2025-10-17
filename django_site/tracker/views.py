@@ -9,7 +9,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
-from .forms import ItemForm
+from .forms import ITEM_STATUS_CHOICES, ItemForm
 from .models import (
     Category,
     Character,
@@ -198,6 +198,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
         "items": items,
         "query": query or "",
         "status": status or "",
+        "status_choices": ITEM_STATUS_CHOICES,
         "companies": companies,
         "active_company": company_name or "",
     }

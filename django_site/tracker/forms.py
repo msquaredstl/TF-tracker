@@ -10,6 +10,8 @@ STATUS_CHOICES = [
     ("Wishlist", "Wishlist"),
 ]
 
+ITEM_STATUS_CHOICES = [choice[0] for choice in STATUS_CHOICES]
+
 
 class ItemForm(forms.Form):
     """Form that mirrors the fields available in the FastAPI UI."""

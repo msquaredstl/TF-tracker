@@ -5,7 +5,7 @@
   <input type="text" name="q" placeholder="Search name/SKU/notes" value="{{ query }}">
   <select name="status">
     <option value="">All Statuses</option>
-    {% for s in "Owned,Preorder,Sold,Wishlist".split(",") %}
+    {% for s in status_choices %}
       <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
     {% endfor %}
   </select>
