@@ -1,11 +1,14 @@
 """Views powering the Django web frontend."""
+
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Mapping
+from functools import lru_cache
+from typing import Any, Iterable, List, Mapping, Sequence
 
 from django.db import connection, transaction
 from django.db.models import Min, Q
 from django.db.models.functions import Coalesce
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils.dateparse import parse_date
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,12 +19,11 @@ from .models import (
     Category,
     Character,
     Company,
-    Faction,
     Item,
     ItemType,
     Line,
+    Purchase,
     Series,
-    Team,
     Vendor,
 )
 
@@ -94,6 +96,117 @@ def _parse_date_filter(value: str | None):
         return None
     parsed = parse_date(value)
     return parsed
+
+
+def _fetch_scalar_list(sql: str, params: Sequence[Any] | None = None) -> List[Any]:
+    """Execute *sql* and return the first column from all rows."""
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params or [])
+        return [row[0] for row in cursor.fetchall()]
+
+
+@lru_cache(maxsize=1)
+def _purchase_has_order_date() -> bool:
+    """Return True when the ``purchase`` table exposes an ``order_date`` column."""
+
+    table_name = Purchase._meta.db_table
+    try:
+        with connection.cursor() as cursor:
+            description = connection.introspection.get_table_description(
+                cursor, table_name
+            )
+    except (ProgrammingError, OperationalError):
+        return False
+
+    for column in description:
+        name = getattr(column, "name", "")
+        if name and name.lower() == "order_date":
+            return True
+    return False
+
+
+def _item_ids_for_faction(name: str) -> List[int]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT ic.item_id
+        FROM itemcharacter AS ic
+        INNER JOIN character AS c ON c.id = ic.character_id
+        INNER JOIN faction AS f ON f.id = c.faction_id
+        WHERE LOWER(f.name) = LOWER(%s)
+        """,
+        [name],
+    )
+
+
+def _item_ids_for_team(name: str) -> List[int]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT ic.item_id
+        FROM itemcharacter AS ic
+        INNER JOIN characterteam AS ct ON ct.character_id = ic.character_id
+        INNER JOIN team AS t ON t.id = ct.team_id
+        WHERE LOWER(t.name) = LOWER(%s)
+        """,
+        [name],
+    )
+
+
+def _item_ids_for_character(name: str) -> List[int]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT ic.item_id
+        FROM itemcharacter AS ic
+        INNER JOIN character AS c ON c.id = ic.character_id
+        WHERE LOWER(c.name) = LOWER(%s)
+        """,
+        [name],
+    )
+
+
+def _filter_by_item_ids(queryset, item_ids: Iterable[int]):
+    ids = list(item_ids)
+    if not ids:
+        return queryset.none()
+    return queryset.filter(pk__in=ids)
+
+
+def _faction_names() -> List[str]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT f.name
+        FROM faction AS f
+        INNER JOIN character AS c ON c.faction_id = f.id
+        INNER JOIN itemcharacter AS ic ON ic.character_id = c.id
+        WHERE f.name IS NOT NULL AND TRIM(f.name) != ''
+        ORDER BY LOWER(f.name), f.name
+        """,
+    )
+
+
+def _team_names() -> List[str]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT t.name
+        FROM team AS t
+        INNER JOIN characterteam AS ct ON ct.team_id = t.id
+        INNER JOIN itemcharacter AS ic ON ic.character_id = ct.character_id
+        WHERE t.name IS NOT NULL AND TRIM(t.name) != ''
+        ORDER BY LOWER(t.name), t.name
+        """,
+    )
+
+
+def _character_names() -> List[str]:
+    return _fetch_scalar_list(
+        """
+        SELECT DISTINCT c.name
+        FROM character AS c
+        INNER JOIN itemcharacter AS ic ON ic.character_id = c.id
+        WHERE c.name IS NOT NULL AND TRIM(c.name) != ''
+        ORDER BY LOWER(c.name), c.name
+        """,
+    )
 
 
 def _sync_characters(item: Item, characters_raw: str | None) -> None:
@@ -172,7 +285,9 @@ def _as_optional_str(value: Any) -> str | None:
     return text or None
 
 
-def _save_item_from_form(data: Mapping[str, Any], *, instance: Item | None = None) -> Item:
+def _save_item_from_form(
+    data: Mapping[str, Any], *, instance: Item | None = None
+) -> Item:
     with transaction.atomic():
         item = instance or Item()
         item.name = _as_optional_str(data.get("name")) or ""
@@ -191,9 +306,15 @@ def _save_item_from_form(data: Mapping[str, Any], *, instance: Item | None = Non
         line = _get_or_create_line(_as_optional_str(data.get("line_name")), company)
         item.company = company
         item.line = line
-        item.series = _get_or_create_by_name(Series, _as_optional_str(data.get("series_name")))
-        item.type = _get_or_create_by_name(ItemType, _as_optional_str(data.get("type_name")))
-        item.category = _get_or_create_by_name(Category, _as_optional_str(data.get("category_name")))
+        item.series = _get_or_create_by_name(
+            Series, _as_optional_str(data.get("series_name"))
+        )
+        item.type = _get_or_create_by_name(
+            ItemType, _as_optional_str(data.get("type_name"))
+        )
+        item.category = _get_or_create_by_name(
+            Category, _as_optional_str(data.get("category_name"))
+        )
 
         item.save()
         _sync_characters(item, _as_optional_str(data.get("characters")))
@@ -202,16 +323,21 @@ def _save_item_from_form(data: Mapping[str, Any], *, instance: Item | None = Non
 
 def item_list(request: HttpRequest) -> HttpResponse:
     """List items with optional filtering that mirrors the FastAPI frontend."""
-    queryset = (
-        Item.objects.select_related("company", "line", "series", "type", "category")
-        .annotate(
-            order_date_value=Coalesce(
-                Min("purchases__order_date"),
-                Min("purchases__purchase_date"),
-            ),
-            ship_date_value=Min("purchases__ship_date"),
+    purchase_date_min = Min("purchases__purchase_date")
+    annotations: dict[str, Any] = {
+        "ship_date_value": Min("purchases__ship_date"),
+    }
+    if _purchase_has_order_date():
+        annotations["order_date_value"] = Coalesce(
+            Min("purchases__order_date"),
+            purchase_date_min,
         )
-    )
+    else:
+        annotations["order_date_value"] = purchase_date_min
+
+    queryset = Item.objects.select_related(
+        "company", "line", "series", "type", "category"
+    ).annotate(**annotations)
 
     query = request.GET.get("q")
     if query:
@@ -247,11 +373,11 @@ def item_list(request: HttpRequest) -> HttpResponse:
 
     faction_name = request.GET.get("faction")
     if faction_name:
-        queryset = queryset.filter(character_links__character__faction__name=faction_name)
+        queryset = _filter_by_item_ids(queryset, _item_ids_for_faction(faction_name))
 
     team_name = request.GET.get("team")
     if team_name:
-        queryset = queryset.filter(character_links__character__team_links__team__name=team_name)
+        queryset = _filter_by_item_ids(queryset, _item_ids_for_team(team_name))
 
     vendor_name = request.GET.get("vendor")
     if vendor_name:
@@ -260,15 +386,17 @@ def item_list(request: HttpRequest) -> HttpResponse:
     characters_value = request.GET.get("characters")
     active_characters = _normalize_character_tokens(characters_value)
     for character_name in active_characters:
-        queryset = queryset.filter(character_links__character__name__iexact=character_name)
+        queryset = _filter_by_item_ids(
+            queryset, _item_ids_for_character(character_name)
+        )
 
     order_date_raw = request.GET.get("order_date")
     order_date_value = _parse_date_filter(order_date_raw)
     if order_date_value:
-        queryset = queryset.filter(
-            Q(purchases__order_date=order_date_value)
-            | Q(purchases__purchase_date=order_date_value)
-        )
+        order_filters = Q(purchases__purchase_date=order_date_value)
+        if _purchase_has_order_date():
+            order_filters |= Q(purchases__order_date=order_date_value)
+        queryset = queryset.filter(order_filters)
 
     ship_date_raw = request.GET.get("ship_date")
     ship_date_value = _parse_date_filter(ship_date_raw)
@@ -330,19 +458,9 @@ def item_list(request: HttpRequest) -> HttpResponse:
         .distinct()
     )
 
-    factions = (
-        Faction.objects.filter(characters__item_links__isnull=False)
-        .order_by("name")
-        .values_list("name", flat=True)
-        .distinct()
-    )
+    factions = _faction_names()
 
-    teams = (
-        Team.objects.filter(character_links__character__item_links__isnull=False)
-        .order_by("name")
-        .values_list("name", flat=True)
-        .distinct()
-    )
+    teams = _team_names()
 
     vendors = (
         Vendor.objects.filter(purchases__isnull=False)
@@ -351,12 +469,7 @@ def item_list(request: HttpRequest) -> HttpResponse:
         .distinct()
     )
 
-    character_options = (
-        Character.objects.filter(item_links__isnull=False)
-        .order_by("name")
-        .values_list("name", flat=True)
-        .distinct()
-    )
+    character_options = _character_names()
 
     context = {
         "items": items,
@@ -402,7 +515,8 @@ def item_list(request: HttpRequest) -> HttpResponse:
 
 def item_detail(request: HttpRequest, pk: int) -> HttpResponse:
     item = get_object_or_404(
-        Item.objects.select_related("company", "line", "series", "type", "category"), pk=pk
+        Item.objects.select_related("company", "line", "series", "type", "category"),
+        pk=pk,
     )
     characters = [
         {"name": row["name"], "is_primary": row["is_primary"]}
