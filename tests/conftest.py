@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from typing import Callable, Mapping, Optional
 from urllib.parse import urlencode
 
+import django
 import pytest
 from sqlmodel import SQLModel, Session, create_engine
 from starlette.requests import Request
@@ -12,6 +14,13 @@ from starlette.requests import Request
 ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+DJANGO_ROOT = ROOT / "django_site"
+if str(DJANGO_ROOT) not in sys.path:
+    sys.path.insert(0, str(DJANGO_ROOT))
+
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "tftracker.settings")
+django.setup()
 
 
 @pytest.fixture
