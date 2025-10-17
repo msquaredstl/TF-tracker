@@ -2,18 +2,30 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Any, Iterable, List, Mapping, Sequence
 
 from django.db import connection, transaction
 from django.db.models import Min, Q
 from django.db.models.functions import Coalesce
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils.dateparse import parse_date
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from .forms import ITEM_STATUS_CHOICES, ItemForm
-from .models import Category, Character, Company, Item, ItemType, Line, Series, Vendor
+from .models import (
+    Category,
+    Character,
+    Company,
+    Item,
+    ItemType,
+    Line,
+    Purchase,
+    Series,
+    Vendor,
+)
 
 
 def _clean_name(value: str | None) -> str | None:
@@ -92,6 +104,26 @@ def _fetch_scalar_list(sql: str, params: Sequence[Any] | None = None) -> List[An
     with connection.cursor() as cursor:
         cursor.execute(sql, params or [])
         return [row[0] for row in cursor.fetchall()]
+
+
+@lru_cache(maxsize=1)
+def _purchase_has_order_date() -> bool:
+    """Return True when the ``purchase`` table exposes an ``order_date`` column."""
+
+    table_name = Purchase._meta.db_table
+    try:
+        with connection.cursor() as cursor:
+            description = connection.introspection.get_table_description(
+                cursor, table_name
+            )
+    except (ProgrammingError, OperationalError):
+        return False
+
+    for column in description:
+        name = getattr(column, "name", "")
+        if name and name.lower() == "order_date":
+            return True
+    return False
 
 
 def _item_ids_for_faction(name: str) -> List[int]:
@@ -291,15 +323,21 @@ def _save_item_from_form(
 
 def item_list(request: HttpRequest) -> HttpResponse:
     """List items with optional filtering that mirrors the FastAPI frontend."""
+    purchase_date_min = Min("purchases__purchase_date")
+    annotations: dict[str, Any] = {
+        "ship_date_value": Min("purchases__ship_date"),
+    }
+    if _purchase_has_order_date():
+        annotations["order_date_value"] = Coalesce(
+            Min("purchases__order_date"),
+            purchase_date_min,
+        )
+    else:
+        annotations["order_date_value"] = purchase_date_min
+
     queryset = Item.objects.select_related(
         "company", "line", "series", "type", "category"
-    ).annotate(
-        order_date_value=Coalesce(
-            Min("purchases__order_date"),
-            Min("purchases__purchase_date"),
-        ),
-        ship_date_value=Min("purchases__ship_date"),
-    )
+    ).annotate(**annotations)
 
     query = request.GET.get("q")
     if query:
@@ -355,10 +393,10 @@ def item_list(request: HttpRequest) -> HttpResponse:
     order_date_raw = request.GET.get("order_date")
     order_date_value = _parse_date_filter(order_date_raw)
     if order_date_value:
-        queryset = queryset.filter(
-            Q(purchases__order_date=order_date_value)
-            | Q(purchases__purchase_date=order_date_value)
-        )
+        order_filters = Q(purchases__purchase_date=order_date_value)
+        if _purchase_has_order_date():
+            order_filters |= Q(purchases__order_date=order_date_value)
+        queryset = queryset.filter(order_filters)
 
     ship_date_raw = request.GET.get("ship_date")
     ship_date_value = _parse_date_filter(ship_date_raw)
