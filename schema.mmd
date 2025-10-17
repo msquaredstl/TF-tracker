@@ -1,0 +1,110 @@
+---
+config:
+  layout: dagre
+---
+erDiagram
+    COMPANY {
+        int id PK
+        string name
+    }
+    LINE {
+        int id PK
+        string name
+        int company_id FK
+    }
+    ITEM {
+        int id PK
+        string name
+        string sku
+        string version
+        int year
+        string scale
+        string condition
+        string status
+        string location
+        string url
+        string notes
+        json extra
+        int company_id FK
+        int line_id FK
+        int series_id FK
+        int type_id FK
+        int category_id FK
+    }
+    SERIES {
+        int id PK
+        string name
+    }
+    ITEMTYPE {
+        int id PK
+        string name
+    }
+    CATEGORY {
+        int id PK
+        string name
+    }
+    PURCHASE {
+        int id PK
+        int item_id FK
+        int vendor_id FK
+        date order_date
+        date purchase_date
+        date ship_date
+        decimal price
+        decimal tax
+        decimal shipping
+        string currency
+        string order_number
+        string notes
+    }
+    VENDOR {
+        int id PK
+        string name
+    }
+    CHARACTER {
+        int id PK
+        string name
+        int faction_id FK
+        string aliases
+    }
+    FACTION {
+        int id PK
+        string name
+    }
+    TEAM {
+        int id PK
+        string name
+    }
+    CHARACTERTEAM {
+        int character_id PK, FK
+        int team_id PK, FK
+    }
+    ITEMCHARACTER {
+        int item_id PK, FK
+        int character_id PK, FK
+        bool is_primary
+        string role
+    }
+    TAG {
+        int id PK
+        string name
+    }
+    ITEMTAG {
+        int item_id PK, FK
+        int tag_id PK, FK
+    }
+    COMPANY ||--o{ LINE : has_many
+    COMPANY ||--o{ ITEM : manufactures
+    LINE ||--o{ ITEM : contains
+    SERIES ||--o{ ITEM : groups
+    ITEMTYPE ||--o{ ITEM : categorizes
+    CATEGORY ||--o{ ITEM : classifies
+    ITEM ||--o{ PURCHASE : has_many
+    VENDOR ||--o{ PURCHASE : has_many
+    FACTION ||--o{ CHARACTER : has_many
+    CHARACTER ||--o{ CHARACTERTEAM : member_of
+    TEAM ||--o{ CHARACTERTEAM : includes
+    ITEM ||--o{ ITEMCHARACTER : features
+    CHARACTER ||--o{ ITEMCHARACTER : appears_in
+    ITEM ||--o{ ITEMTAG : tagged_with
+    TAG ||--o{ ITEMTAG : tags

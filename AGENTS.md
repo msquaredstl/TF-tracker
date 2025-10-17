@@ -45,6 +45,16 @@ They apply to all contributors — human or AI — working within this repositor
       ...
   ```
 
+## Import & Formatting Policy (No-Churn)
+
+- **Do not change import order or shape** unless required by a linter or formatter, or when adding/removing actual usage.
+- **Never add unused imports.** Every imported symbol must be referenced in the file (ruff F401 enforced).
+- **No cosmetic-only PRs.** Pure formatting commits must be labeled `chore: format` and contain no logic changes.
+- **Respect tool output.** Imports and formatting are governed by `ruff`, `isort`, and `black`. Do not manually reorder them.
+- **Run these tools in order:**  
+  `ruff --fix . && isort . && black .`
+- **Module-specific rule:** High-churn files like `app/importers/import_csv.py` should not have import blocks modified unless the change is necessary for functional reasons.
+
 ---
 
 ## 🧪 Testing (Django + API)
@@ -84,6 +94,7 @@ They apply to all contributors — human or AI — working within this repositor
 - Seed scripts must be **idempotent** — re-running should not create duplicates or inconsistent state.
 - Place reusable import or setup logic in `scripts/` and ensure it can run in any environment (dev, staging, prod).
 - If migrations introduce breaking changes, include clear upgrade instructions in your PR description.
+- Reflect any model or relationship changes in the Mermaid ER diagram at [`schema.mmd`](./schema.mmd); regenerate exported assets if you maintain them separately.
 
 ---
 
@@ -112,7 +123,7 @@ They apply to all contributors — human or AI — working within this repositor
 ## ✅ Pre-Commit Checklist
 
 Before committing:
-- [ ] Run `black . && isort .`
+- [ ] Run: `ruff --fix . && isort . && black .`
 - [ ] Run `ruff check .`
 - [ ] Run `pytest` and confirm all tests pass
 - [ ] Verify migrations: `python manage.py makemigrations --check`
