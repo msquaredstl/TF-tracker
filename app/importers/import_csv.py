@@ -23,7 +23,9 @@ DEFAULT_MAP = {
   "sku": ["sku","code","id","figure id"],
   "version": ["version","release","variant"],
   "year": ["year","release year"],
+  "order_date": ["order date","ordered"],
   "purchase_date": ["purchase date","bought","date"],
+  "ship_date": ["ship date","shipped"],
   "price": ["price","paid","cost"],
   "tax": ["tax","sales tax"],
   "shipping": ["shipping","postage"],
@@ -199,18 +201,35 @@ def main():
             shipping = to_float(get("shipping") or "")
             currency = (get("currency") or None)
             order_number = (get("order_number") or None)
+            order_date = None
+            order_raw = get("order_date")
+            if order_raw:
+                order_date = parse_date(order_raw)
+
             purchase_date = None
             pd_raw = get("purchase_date")
             if pd_raw:
                 purchase_date = parse_date(pd_raw)
 
-            if any([vendor, price, tax, shipping, currency, order_number, purchase_date]):
+            ship_date = None
+            ship_raw = get("ship_date")
+            if ship_raw:
+                ship_date = parse_date(ship_raw)
+
+            effective_order_date = order_date or purchase_date
+
+            if any([vendor, price, tax, shipping, currency, order_number, effective_order_date, ship_date]):
                 p = Purchase(
                     item_id=item.id,
                     vendor_id=vendor.id if vendor else None,
-                    price=price, tax=tax, shipping=shipping,
-                    currency=currency, order_number=order_number,
-                    purchase_date=purchase_date
+                    price=price,
+                    tax=tax,
+                    shipping=shipping,
+                    currency=currency,
+                    order_number=order_number,
+                    order_date=effective_order_date,
+                    purchase_date=purchase_date,
+                    ship_date=ship_date,
                 )
                 session.add(p)
 

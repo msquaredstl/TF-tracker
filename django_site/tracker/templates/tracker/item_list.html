@@ -2,21 +2,154 @@
 {% block title %}Items — TF Tracker (Django){% endblock %}
 {% block content %}
 <form method="get" action="" class="filters">
-  <input type="text" name="q" placeholder="Search name/SKU/notes" value="{{ query }}">
-  <select name="status">
-    <option value="">All Statuses</option>
-    {% for s in status_choices %}
-      <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
-    {% endfor %}
-  </select>
-  <select name="company">
-    <option value="">All Companies</option>
-    {% for name in companies %}
-      <option value="{{ name }}" {% if active_company == name %}selected{% endif %}>{{ name }}</option>
-    {% endfor %}
-  </select>
-  <button type="submit" class="btn">Filter</button>
-  <a href="{% url 'tracker:item-list' %}" class="btn secondary">Reset</a>
+  <div class="filter-field">
+    <label>Search
+      <input type="text" name="q" placeholder="Search name/SKU/notes" value="{{ query }}">
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Status
+      <select name="status">
+        <option value="">All Statuses</option>
+        {% for s in status_choices %}
+          <option value="{{ s }}" {% if status == s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Company
+      <select name="company">
+        <option value="">All Companies</option>
+        {% for name in companies %}
+          <option value="{{ name }}" {% if active_company == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Line
+      <select name="line">
+        <option value="">All Lines</option>
+        {% for name in lines %}
+          <option value="{{ name }}" {% if active_line == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Series
+      <select name="series">
+        <option value="">All Series</option>
+        {% for name in series_options %}
+          <option value="{{ name }}" {% if active_series == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Type
+      <select name="type">
+        <option value="">All Types</option>
+        {% for name in types %}
+          <option value="{{ name }}" {% if active_type == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Category
+      <select name="category">
+        <option value="">All Categories</option>
+        {% for name in categories %}
+          <option value="{{ name }}" {% if active_category == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Faction
+      <select name="faction">
+        <option value="">All Factions</option>
+        {% for name in factions %}
+          <option value="{{ name }}" {% if active_faction == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Team
+      <select name="team">
+        <option value="">All Teams</option>
+        {% for name in teams %}
+          <option value="{{ name }}" {% if active_team == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Vendor
+      <select name="vendor">
+        <option value="">All Vendors</option>
+        {% for name in vendors %}
+          <option value="{{ name }}" {% if active_vendor == name %}selected{% endif %}>{{ name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Order Date
+      <input type="date" name="order_date" value="{{ order_date }}">
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Ship Date
+      <input type="date" name="ship_date" value="{{ ship_date }}">
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Order Date Sort
+      <select name="order_sort">
+        {% for value, label in order_sort_choices %}
+          <option value="{{ value }}" {% if order_sort == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field">
+    <label>Ship Date Sort
+      <select name="ship_sort">
+        {% for value, label in ship_sort_choices %}
+          <option value="{{ value }}" {% if ship_sort == value %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+  <div class="filter-field full">
+    <label>Characters
+      <div class="tag-input" data-tag-input>
+        <div class="tag-input__tags" data-tag-list>
+          {% for name in active_characters %}
+            <span class="tag-pill" data-value="{{ name }}">
+              {{ name }}
+              <button type="button" class="tag-pill__remove" data-remove-tag aria-label="Remove {{ name }}">×</button>
+            </span>
+          {% endfor %}
+        </div>
+        <input type="text" class="tag-input__entry" data-tag-source list="character-suggestions" placeholder="Type a character and press Enter">
+        <input type="hidden" name="characters" data-tag-value value="{{ characters_csv }}">
+      </div>
+    </label>
+    <datalist id="character-suggestions">
+      {% for name in character_options %}
+        <option value="{{ name }}"></option>
+      {% endfor %}
+    </datalist>
+  </div>
+  <div class="filter-actions full">
+    <button type="submit" class="btn">Filter</button>
+    <a href="{% url 'tracker:item-list' %}" class="btn secondary">Reset</a>
+  </div>
 </form>
 
 <div class="actions">
@@ -32,6 +165,8 @@
       <th>Series</th>
       <th>Year</th>
       <th>Status</th>
+      <th>Order Date</th>
+      <th>Ship Date</th>
     </tr>
   </thead>
   <tbody>
@@ -43,10 +178,20 @@
       <td>{{ item.series.name|default_if_none:"" }}</td>
       <td>{{ item.year|default_if_none:"" }}</td>
       <td>{{ item.status|default_if_none:"" }}</td>
+      <td>
+        {% if item.order_date_value %}
+          {{ item.order_date_value|date:"Y-m-d" }}
+        {% endif %}
+      </td>
+      <td>
+        {% if item.ship_date_value %}
+          {{ item.ship_date_value|date:"Y-m-d" }}
+        {% endif %}
+      </td>
     </tr>
     {% empty %}
     <tr>
-      <td colspan="6">No items found.</td>
+      <td colspan="8">No items found.</td>
     </tr>
     {% endfor %}
   </tbody>
