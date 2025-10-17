@@ -7,6 +7,7 @@ from typing import Any, Iterable, List, Mapping, Sequence
 from django.db import connection, transaction
 from django.db.models import Min, Q
 from django.db.models.functions import Coalesce
+from django.db.utils import OperationalError, ProgrammingError
 from django.utils.dateparse import parse_date
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
