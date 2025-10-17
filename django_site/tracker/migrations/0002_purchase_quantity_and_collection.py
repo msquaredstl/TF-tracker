@@ -4,20 +4,21 @@ from django.conf import settings
 from django.db import migrations
 
 
-def _table_has_column(cursor, table, column):
-    description = cursor.connection.introspection.get_table_description(cursor, table)
-    lowered = {
+def _table_column_names(connection, table):
+    with connection.cursor() as cursor:
+        description = connection.introspection.get_table_description(cursor, table)
+    return {
         getattr(col, "name", getattr(col, "column_name", "")).lower() for col in description
     }
-    return column.lower() in lowered
 
 
 def add_purchase_columns(apps, schema_editor):
     connection = schema_editor.connection
+    existing_columns = _table_column_names(connection, "purchase")
     with connection.cursor() as cursor:
-        if not _table_has_column(cursor, "purchase", "qty"):
+        if "qty" not in existing_columns:
             cursor.execute("ALTER TABLE purchase ADD COLUMN qty INTEGER DEFAULT 1")
-        if not _table_has_column(cursor, "purchase", "collection_id"):
+        if "collection_id" not in existing_columns:
             cursor.execute("ALTER TABLE purchase ADD COLUMN collection_id INTEGER")
 
 
