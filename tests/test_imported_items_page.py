@@ -38,4 +38,6 @@ def test_imported_items_page_displays_imported_rows(session, request_factory) ->
 def test_imported_items_page_handles_empty_state(session, request_factory) -> None:
     response = imported_items(request_factory("/imports"), session=session)
     assert response.status_code == 200
-    assert "No imported data available yet." in response.template.render(response.context)
+    assert "No imported data available yet." in response.template.render(
+        response.context
+    )

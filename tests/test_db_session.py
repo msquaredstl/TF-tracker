@@ -3,8 +3,9 @@ from unittest import TestCase, mock
 
 os.environ.setdefault("DB_URL", "sqlite:///./test.db")
 
-import app.db.session as db_session
 from sqlalchemy.exc import SQLAlchemyError
+
+import app.db.session as db_session
 
 
 class VerifyConnectionTests(TestCase):
@@ -14,7 +15,9 @@ class VerifyConnectionTests(TestCase):
         connection_cm.__enter__.return_value = mock_connection
         connection_cm.__exit__.return_value = False
 
-        with mock.patch.object(db_session.engine, "connect", return_value=connection_cm) as connect:
+        with mock.patch.object(
+            db_session.engine, "connect", return_value=connection_cm
+        ) as connect:
             db_session.verify_connection()
 
         connect.assert_called_once_with()
@@ -38,7 +41,9 @@ class VerifyConnectionTests(TestCase):
 
         override_url = "mysql+pymysql://u:p@h:3306/db"
 
-        with mock.patch("app.db.session._create_engine", return_value=temp_engine) as create_engine:
+        with mock.patch(
+            "app.db.session._create_engine", return_value=temp_engine
+        ) as create_engine:
             db_session.verify_connection(override_url)
 
         create_engine.assert_called_once_with(override_url)

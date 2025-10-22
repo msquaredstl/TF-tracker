@@ -9,11 +9,13 @@ class BaseSQLModel(SQLModel):
     __abstract__ = True
     __table_args__ = {"extend_existing": True}
 
+
 class Company(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     lines: List["Line"] = Relationship(back_populates="company")
     items: List["Item"] = Relationship(back_populates="company")
+
 
 class Line(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -22,20 +24,24 @@ class Line(BaseSQLModel, table=True):
     company: Optional[Company] = Relationship(back_populates="lines")
     items: List["Item"] = Relationship(back_populates="line")
 
+
 class Series(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     items: List["Item"] = Relationship(back_populates="series")
+
 
 class ItemType(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     items: List["Item"] = Relationship(back_populates="type")
 
+
 class Category(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     items: List["Item"] = Relationship(back_populates="category")
+
 
 class Vendor(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -55,10 +61,12 @@ class Faction(BaseSQLModel, table=True):
     name: str = Field(index=True, unique=True)
     characters: List["Character"] = Relationship(back_populates="faction")
 
+
 class Team(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     character_links: List["CharacterTeam"] = Relationship(back_populates="team")
+
 
 class Character(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -70,22 +78,26 @@ class Character(BaseSQLModel, table=True):
     team_links: List["CharacterTeam"] = Relationship(back_populates="character")
     item_links: List["ItemCharacter"] = Relationship(back_populates="character")
 
+
 class CharacterTeam(BaseSQLModel, table=True):
     character_id: int = Field(foreign_key="character.id", primary_key=True)
     team_id: int = Field(foreign_key="team.id", primary_key=True)
     character: Character = Relationship(back_populates="team_links")
     team: Team = Relationship(back_populates="character_links")
 
+
 class Tag(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str = Field(index=True, unique=True)
     item_links: List["ItemTag"] = Relationship(back_populates="tag")
+
 
 class ItemTag(BaseSQLModel, table=True):
     item_id: int = Field(foreign_key="item.id", primary_key=True)
     tag_id: int = Field(foreign_key="tag.id", primary_key=True)
     tag: Tag = Relationship(back_populates="item_links")
     item: "Item" = Relationship(back_populates="tag_links")
+
 
 class Item(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -117,6 +129,7 @@ class Item(BaseSQLModel, table=True):
     purchases: List["Purchase"] = Relationship(back_populates="item")
     tag_links: List[ItemTag] = Relationship(back_populates="item")
 
+
 class ItemCharacter(BaseSQLModel, table=True):
     item_id: int = Field(foreign_key="item.id", primary_key=True)
     character_id: int = Field(foreign_key="character.id", primary_key=True)
@@ -124,6 +137,7 @@ class ItemCharacter(BaseSQLModel, table=True):
     role: Optional[str] = None
     item: Item = Relationship(back_populates="character_links")
     character: Character = Relationship(back_populates="item_links")
+
 
 class Purchase(BaseSQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)

@@ -4,21 +4,28 @@ import importlib.util
 import os
 from typing import Iterator, Optional, Sequence
 
-from sqlalchemy.engine import Engine, URL
+from sqlalchemy.engine import URL, Engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 
 _dotenv_spec = importlib.util.find_spec("dotenv")
 if _dotenv_spec is not None:
     load_dotenv = importlib.import_module("dotenv").load_dotenv  # type: ignore[attr-defined]
 else:
+
     def load_dotenv() -> bool:
         return False
+
 
 load_dotenv()
 
 DEFAULT_SQLITE_URL = "sqlite:///./collection.db"
-_REQUIRED_COMPONENT_KEYS: Sequence[str] = ("DB_USER", "DB_PASSWORD", "DB_HOST", "DB_NAME")
+_REQUIRED_COMPONENT_KEYS: Sequence[str] = (
+    "DB_USER",
+    "DB_PASSWORD",
+    "DB_HOST",
+    "DB_NAME",
+)
 
 
 def _build_url_from_components() -> Optional[str]:
@@ -26,7 +33,9 @@ def _build_url_from_components() -> Optional[str]:
     provided_required = {key: value for key, value in required_values.items() if value}
 
     if provided_required and len(provided_required) != len(required_values):
-        missing = ", ".join(sorted(key for key, value in required_values.items() if not value))
+        missing = ", ".join(
+            sorted(key for key, value in required_values.items() if not value)
+        )
         raise RuntimeError(
             "Incomplete component-based database configuration. Missing environment variables: "
             f"{missing}."

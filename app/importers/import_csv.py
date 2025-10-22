@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 from sqlmodel import Session, select
-from app.db.session import DEFAULT_SQLITE_URL, DB_URL, engine, init_db
+
+from app.db.session import DB_URL, DEFAULT_SQLITE_URL, engine, init_db
 from app.models import (
     Category,
     Character,
@@ -23,44 +24,55 @@ from app.models import (
 from app.utils import get_or_create, split_characters
 
 DEFAULT_MAP = {
-  "name": ["name","figure","character","title"],
-  "company": ["company","manufacturer","brand"],
-  "line": ["line","series (product line)","sub-line","subline","brand line"],
-  "series": ["series","media","source"],
-  "type": ["type","kind"],
-  "category": ["category","class","scale category"],
-  "sku": ["sku","code","id","figure id"],
-  "version": ["version","release","variant"],
-  "year": ["year","release year"],
-  "primary_character": ["character","primary character","main character"],
-  "order_date": ["order date","ordered"],
-  "purchase_date": ["purchase date","bought","date"],
-  "ship_date": ["ship date","shipped"],
-  "price": ["price","paid","cost"],
-  "tax": ["tax","sales tax"],
-  "shipping": ["shipping","postage"],
-  "currency": ["currency"],
-  "order_number": ["order","order number","order #"],
-  "vendor": ["vendor","store","source","retailer","marketplace"],
-  "quantity": ["qty","quantity"],
-  "condition": ["condition","state"],
-  "status": ["status","owned/sold/preorder","owned","preorder","sold","wishlist"],
-  "location": ["location","shelf","bin","box"],
-  "url": ["url","link"],
-  "characters": ["characters","character list","additional characters"],
-  "faction": ["faction","allegiance"],
-  "notes": ["notes","comments"]
+    "name": ["name", "figure", "character", "title"],
+    "company": ["company", "manufacturer", "brand"],
+    "line": ["line", "series (product line)", "sub-line", "subline", "brand line"],
+    "series": ["series", "media", "source"],
+    "type": ["type", "kind"],
+    "category": ["category", "class", "scale category"],
+    "sku": ["sku", "code", "id", "figure id"],
+    "version": ["version", "release", "variant"],
+    "year": ["year", "release year"],
+    "primary_character": ["character", "primary character", "main character"],
+    "order_date": ["order date", "ordered"],
+    "purchase_date": ["purchase date", "bought", "date"],
+    "ship_date": ["ship date", "shipped"],
+    "price": ["price", "paid", "cost"],
+    "tax": ["tax", "sales tax"],
+    "shipping": ["shipping", "postage"],
+    "currency": ["currency"],
+    "order_number": ["order", "order number", "order #"],
+    "vendor": ["vendor", "store", "source", "retailer", "marketplace"],
+    "quantity": ["qty", "quantity"],
+    "condition": ["condition", "state"],
+    "status": [
+        "status",
+        "owned/sold/preorder",
+        "owned",
+        "preorder",
+        "sold",
+        "wishlist",
+    ],
+    "location": ["location", "shelf", "bin", "box"],
+    "url": ["url", "link"],
+    "characters": ["characters", "character list", "additional characters"],
+    "faction": ["faction", "allegiance"],
+    "notes": ["notes", "comments"],
 }
+
 
 def normalize(s: str) -> str:
     return s.strip().lower()
 
-def build_header_map(headers: List[str], user_map: Optional[Dict[str, List[str]]] = None) -> Dict[str, Optional[str]]:
+
+def build_header_map(
+    headers: List[str], user_map: Optional[Dict[str, List[str]]] = None
+) -> Dict[str, Optional[str]]:
     mapping = {}
     hdr_norm = {normalize(h): h for h in headers}
     merged = DEFAULT_MAP.copy()
     if user_map:
-        for k,v in user_map.items():
+        for k, v in user_map.items():
             merged[k] = v
     for field, aliases in merged.items():
         found = None
@@ -72,8 +84,10 @@ def build_header_map(headers: List[str], user_map: Optional[Dict[str, List[str]]
         mapping[field] = found
     return mapping
 
+
 def parse_date(val: str) -> Optional[str]:
     from datetime import datetime
+
     val = (val or "").strip()
     if not val:
         return None
@@ -85,12 +99,14 @@ def parse_date(val: str) -> Optional[str]:
             pass
     return None
 
+
 def to_float(val: str) -> Optional[float]:
     try:
-        val = val.replace("$","").replace(",","").strip()
+        val = val.replace("$", "").replace(",", "").strip()
         return float(val) if val else None
     except Exception:
         return None
+
 
 def to_int(val: str) -> Optional[int]:
     try:
@@ -98,6 +114,7 @@ def to_int(val: str) -> Optional[int]:
         return int(v) if v else None
     except Exception:
         return None
+
 
 def ensure_database_target(db_url: str, allow_sqlite: bool) -> None:
     if not allow_sqlite and db_url == DEFAULT_SQLITE_URL:
@@ -108,9 +125,15 @@ def ensure_database_target(db_url: str, allow_sqlite: bool) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Import a CSV export into normalized tables.")
-    parser.add_argument("csv_path", help="Path to the CSV file (exported from Google Sheets).")
-    parser.add_argument("--map", dest="mapfile", help="Optional JSON mapping overrides.", default=None)
+    parser = argparse.ArgumentParser(
+        description="Import a CSV export into normalized tables."
+    )
+    parser.add_argument(
+        "csv_path", help="Path to the CSV file (exported from Google Sheets)."
+    )
+    parser.add_argument(
+        "--map", dest="mapfile", help="Optional JSON mapping overrides.", default=None
+    )
     parser.add_argument(
         "--allow-sqlite",
         action="store_true",
@@ -131,14 +154,20 @@ def main():
 
     init_db()
 
-    with open(csv_path, "r", encoding="utf-8-sig", newline="") as f, Session(engine) as session:
+    with (
+        open(csv_path, "r", encoding="utf-8-sig", newline="") as f,
+        Session(engine) as session,
+    ):
         reader = csv.DictReader(f)
         headers = reader.fieldnames or []
         header_map = build_header_map(headers, user_map)
 
         count = 0
-        default_collection = session.exec(select(Collection).order_by(Collection.id)).first()
+        default_collection = session.exec(
+            select(Collection).order_by(Collection.id)
+        ).first()
         for row in reader:
+
             def get(field: str):
                 h = header_map.get(field)
                 return row.get(h) if h else None
@@ -189,7 +218,9 @@ def main():
                 character_chunks.append(additional_characters)
             chars = split_characters("\n".join(character_chunks))
             faction_hint = get("faction")
-            faction_obj = get_or_create(session, Faction, faction_hint) if faction_hint else None
+            faction_obj = (
+                get_or_create(session, Faction, faction_hint) if faction_hint else None
+            )
 
             primary_set = False
             for idx, raw in enumerate(chars):
@@ -204,16 +235,25 @@ def main():
                     ch.faction_id = faction_obj.id
                     session.add(ch)
                     session.commit()
-                link = ItemCharacter(item_id=item.id, character_id=ch.id, is_primary=is_primary)
+                link = ItemCharacter(
+                    item_id=item.id, character_id=ch.id, is_primary=is_primary
+                )
                 if is_primary:
                     primary_set = True
                 session.add(link)
 
             if chars and not primary_set:
                 first = chars[0].split("|")[0].strip()
-                ch = session.exec(select(Character).where(Character.name == first)).first()
+                ch = session.exec(
+                    select(Character).where(Character.name == first)
+                ).first()
                 if ch:
-                    link = session.exec(select(ItemCharacter).where(ItemCharacter.item_id == item.id, ItemCharacter.character_id == ch.id)).first()
+                    link = session.exec(
+                        select(ItemCharacter).where(
+                            ItemCharacter.item_id == item.id,
+                            ItemCharacter.character_id == ch.id,
+                        )
+                    ).first()
                     if link:
                         link.is_primary = True
 
@@ -222,8 +262,8 @@ def main():
             price = to_float(get("price") or "")
             tax = to_float(get("tax") or "")
             shipping = to_float(get("shipping") or "")
-            currency = (get("currency") or None)
-            order_number = (get("order_number") or None)
+            currency = get("currency") or None
+            order_number = get("order_number") or None
             quantity_raw = get("quantity") or ""
             quantity = to_int(quantity_raw)
             quantity = quantity if quantity and quantity > 0 else 1
@@ -245,18 +285,21 @@ def main():
             effective_order_date = order_date or purchase_date
 
             has_quantity_input = bool(quantity_raw and quantity_raw.strip())
-            if any(
-                [
-                    vendor,
-                    price,
-                    tax,
-                    shipping,
-                    currency,
-                    order_number,
-                    effective_order_date,
-                    ship_date,
-                ]
-            ) or has_quantity_input:
+            if (
+                any(
+                    [
+                        vendor,
+                        price,
+                        tax,
+                        shipping,
+                        currency,
+                        order_number,
+                        effective_order_date,
+                        ship_date,
+                    ]
+                )
+                or has_quantity_input
+            ):
                 p = Purchase(
                     item_id=item.id,
                     vendor_id=vendor.id if vendor else None,
@@ -277,6 +320,7 @@ def main():
             count += 1
 
         print(f"Imported {count} items.")
+
 
 if __name__ == "__main__":
     main()

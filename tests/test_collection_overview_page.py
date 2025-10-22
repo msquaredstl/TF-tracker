@@ -4,7 +4,9 @@ from app.main import collection_overview
 from app.models import Company, Item, Purchase, Vendor
 
 
-def test_collection_overview_displays_summary_and_items(session, request_factory) -> None:
+def test_collection_overview_displays_summary_and_items(
+    session, request_factory
+) -> None:
     company = Company(name="Hasbro")
     session.add(company)
     session.commit()
@@ -40,7 +42,9 @@ def test_collection_overview_displays_summary_and_items(session, request_factory
     assert "Companies represented" in content
 
 
-def test_collection_overview_filters_by_owner_identifier(session, request_factory) -> None:
+def test_collection_overview_filters_by_owner_identifier(
+    session, request_factory
+) -> None:
     company = Company(name="Takara")
     session.add(company)
     session.commit()
@@ -54,7 +58,9 @@ def test_collection_overview_filters_by_owner_identifier(session, request_factor
     session.commit()
 
     response = collection_overview(
-        request_factory("/collection", {"owner": "alpha"}), owner="alpha", session=session
+        request_factory("/collection", {"owner": "alpha"}),
+        owner="alpha",
+        session=session,
     )
     assert response.status_code == 200
 
