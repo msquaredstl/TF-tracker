@@ -30,7 +30,9 @@ def test_item_fields_cover_sheet_attributes():
 
 
 def test_purchase_fields_cover_sheet_attributes():
-    purchase_field_names = {field.name for field in dj_models.Purchase._meta.get_fields()}
+    purchase_field_names = {
+        field.name for field in dj_models.Purchase._meta.get_fields()
+    }
 
     expected_purchase_fields = {
         "order_date",

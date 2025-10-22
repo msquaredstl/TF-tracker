@@ -1,16 +1,35 @@
-import argparse, sys, yaml
+import argparse
+import sys
 from pathlib import Path
+
+import yaml
 from sqlmodel import Session, select
+
 from app.db.session import engine, init_db
-from app.models import Faction, Company, Line, Series, ItemType, Category, Vendor, Team, Character
+from app.models import (
+    Category,
+    Character,
+    Company,
+    Faction,
+    ItemType,
+    Line,
+    Series,
+    Team,
+    Vendor,
+)
+
 
 def get_or_create_by_name(session: Session, model, name: str):
     name = name.strip()
     obj = session.exec(select(model).where(model.name == name)).first()
-    if obj: return obj
+    if obj:
+        return obj
     obj = model(name=name)
-    session.add(obj); session.commit(); session.refresh(obj)
+    session.add(obj)
+    session.commit()
+    session.refresh(obj)
     return obj
+
 
 def seed(path: Path):
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -19,12 +38,13 @@ def seed(path: Path):
         for n in data.get("factions", []):
             get_or_create_by_name(session, Faction, n)
         for c in data.get("companies", []):
-            comp = get_or_create_by_name(session, Company, c.get("name",""))
-            for ln in c.get("lines",[]) or []:
+            comp = get_or_create_by_name(session, Company, c.get("name", ""))
+            for ln in c.get("lines", []) or []:
                 line = get_or_create_by_name(session, Line, ln)
                 if line and comp and line.company_id is None:
                     line.company_id = comp.id
-                    session.add(line); session.commit()
+                    session.add(line)
+                    session.commit()
         for n in data.get("series", []):
             get_or_create_by_name(session, Series, n)
         for n in data.get("types", []):
@@ -37,13 +57,18 @@ def seed(path: Path):
             get_or_create_by_name(session, Team, n)
         for c in data.get("characters", []):
             nm = (c.get("name") or "").strip()
-            if not nm: continue
-            char = session.exec(select(Character).where(Character.name == nm)).first() or Character(name=nm)
+            if not nm:
+                continue
+            char = session.exec(
+                select(Character).where(Character.name == nm)
+            ).first() or Character(name=nm)
             fac = (c.get("faction") or "").strip()
             if fac:
                 f = get_or_create_by_name(session, Faction, fac)
                 char.faction_id = f.id
-            session.add(char); session.commit()
+            session.add(char)
+            session.commit()
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -51,8 +76,11 @@ def main():
     args = ap.parse_args()
     p = Path(args.path)
     if not p.exists():
-        print(f"Seed file not found: {p}", file=sys.stderr); sys.exit(2)
-    seed(p); print("Seed complete.")
+        print(f"Seed file not found: {p}", file=sys.stderr)
+        sys.exit(2)
+    seed(p)
+    print("Seed complete.")
+
 
 if __name__ == "__main__":
     main()

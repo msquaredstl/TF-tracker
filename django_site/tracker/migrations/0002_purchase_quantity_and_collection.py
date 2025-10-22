@@ -12,7 +12,8 @@ def _table_column_names(connection, table):
     except DatabaseError:
         return None
     return {
-        getattr(col, "name", getattr(col, "column_name", "")).lower() for col in description
+        getattr(col, "name", getattr(col, "column_name", "")).lower()
+        for col in description
     }
 
 
@@ -77,9 +78,7 @@ def populate_purchase_defaults(apps, schema_editor):
             f"UPDATE purchase SET collection_id = {int(collection.pk)} "
             "WHERE collection_id IS NULL"
         )
-        cursor.execute(
-            "UPDATE purchase SET qty = 1 WHERE qty IS NULL OR qty = 0"
-        )
+        cursor.execute("UPDATE purchase SET qty = 1 WHERE qty IS NULL OR qty = 0")
 
 
 class Migration(migrations.Migration):

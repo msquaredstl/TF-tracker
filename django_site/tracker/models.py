@@ -1,4 +1,5 @@
 """Django ORM models that reuse the existing SQLModel tables."""
+
 from __future__ import annotations
 
 from django.conf import settings
@@ -21,7 +22,12 @@ class Line(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255)
     company = models.ForeignKey(
-        Company, related_name="lines", null=True, blank=True, on_delete=models.DO_NOTHING, db_column="company_id"
+        Company,
+        related_name="lines",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="company_id",
     )
 
     class Meta:
@@ -193,19 +199,44 @@ class Item(models.Model):
     extra = models.JSONField(null=True, blank=True)
 
     company = models.ForeignKey(
-        Company, related_name="items", null=True, blank=True, on_delete=models.DO_NOTHING, db_column="company_id"
+        Company,
+        related_name="items",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="company_id",
     )
     line = models.ForeignKey(
-        Line, related_name="items", null=True, blank=True, on_delete=models.DO_NOTHING, db_column="line_id"
+        Line,
+        related_name="items",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="line_id",
     )
     series = models.ForeignKey(
-        Series, related_name="items", null=True, blank=True, on_delete=models.DO_NOTHING, db_column="series_id"
+        Series,
+        related_name="items",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="series_id",
     )
     type = models.ForeignKey(
-        ItemType, related_name="items", null=True, blank=True, on_delete=models.DO_NOTHING, db_column="type_id"
+        ItemType,
+        related_name="items",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="type_id",
     )
     category = models.ForeignKey(
-        Category, related_name="items", null=True, blank=True, on_delete=models.DO_NOTHING, db_column="category_id"
+        Category,
+        related_name="items",
+        null=True,
+        blank=True,
+        on_delete=models.DO_NOTHING,
+        db_column="category_id",
     )
 
     class Meta:

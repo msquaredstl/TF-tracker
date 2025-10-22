@@ -6,7 +6,6 @@ from types import SimpleNamespace
 
 import pytest
 from django.db.utils import OperationalError, ProgrammingError
-
 from tracker import schema, views
 
 
@@ -27,7 +26,9 @@ def _install_table_description(monkeypatch, columns):
     def fake_cursor():
         return _DummyCursor()
 
-    def fake_get_table_description(cursor, table_name):  # pragma: no cover - exercised indirectly
+    def fake_get_table_description(
+        cursor, table_name
+    ):  # pragma: no cover - exercised indirectly
         if isinstance(columns, Exception):
             raise columns
         return [SimpleNamespace(name=name) for name in columns]

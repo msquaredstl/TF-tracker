@@ -10,7 +10,8 @@ def _table_column_names(connection, table: str) -> set[str] | None:
     except DatabaseError:
         return None
     return {
-        getattr(col, "name", getattr(col, "column_name", "")).lower() for col in description
+        getattr(col, "name", getattr(col, "column_name", "")).lower()
+        for col in description
     }
 
 

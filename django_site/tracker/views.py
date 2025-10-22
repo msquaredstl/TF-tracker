@@ -7,11 +7,10 @@ from typing import Any, Iterable, List, Mapping, Sequence
 from django.db import connection, transaction
 from django.db.models import Min, Q
 from django.db.models.functions import Coalesce
-from django.db.utils import OperationalError, ProgrammingError
-from django.utils.dateparse import parse_date
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.dateparse import parse_date
 
 from . import schema
 from .forms import ITEM_STATUS_CHOICES, ItemForm
@@ -524,16 +523,19 @@ def _item_teams(item_id: int) -> List[str]:
 
 def _item_purchase_rows(item: Item) -> List[dict[str, Any]]:
     rows: List[dict[str, Any]] = []
-    purchases = (
-        item.purchases.select_related("vendor", "collection__user")
-        .order_by("purchase_date", "order_date", "ship_date", "pk")
+    purchases = item.purchases.select_related("vendor", "collection__user").order_by(
+        "purchase_date", "order_date", "ship_date", "pk"
     )
     for purchase in purchases:
         quantity = purchase.quantity or 1
         price_component = (
             (purchase.price or 0.0) * quantity if purchase.price is not None else None
         )
-        components = [value for value in (price_component, purchase.tax, purchase.shipping) if value is not None]
+        components = [
+            value
+            for value in (price_component, purchase.tax, purchase.shipping)
+            if value is not None
+        ]
         total = sum(components) if components else None
         owner_user = purchase.collection.user if purchase.collection else None
         owner_name = None

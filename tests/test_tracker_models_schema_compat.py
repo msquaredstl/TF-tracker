@@ -9,7 +9,9 @@ def test_configure_schema_keeps_purchase_date_columns(monkeypatch):
             return False
         return True
 
-    monkeypatch.setattr(schema, "table_has_column", fake_table_has_column, raising=False)
+    monkeypatch.setattr(
+        schema, "table_has_column", fake_table_has_column, raising=False
+    )
     models.configure_schema_compatibility(force=True)
 
     order_field = models.Purchase._meta.get_field("order_date")
@@ -34,7 +36,9 @@ def test_configure_schema_uses_rowid_for_join_tables(monkeypatch):
             return False
         return True
 
-    monkeypatch.setattr(schema, "table_has_column", fake_table_has_column, raising=False)
+    monkeypatch.setattr(
+        schema, "table_has_column", fake_table_has_column, raising=False
+    )
     models.configure_schema_compatibility(force=True)
 
     for model in (models.CharacterTeam, models.ItemCharacter, models.ItemTag):
@@ -52,7 +56,9 @@ def test_configure_schema_falls_back_for_quantity(monkeypatch):
             return False
         return True
 
-    monkeypatch.setattr(schema, "table_has_column", fake_table_has_column, raising=False)
+    monkeypatch.setattr(
+        schema, "table_has_column", fake_table_has_column, raising=False
+    )
     models.configure_schema_compatibility(force=True)
 
     quantity_field = models.Purchase._meta.get_field("quantity")

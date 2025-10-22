@@ -8,7 +8,7 @@ from urllib.parse import urlencode
 
 import django
 import pytest
-from sqlmodel import SQLModel, Session, create_engine
+from sqlmodel import Session, SQLModel, create_engine
 from starlette.requests import Request
 
 ROOT = Path(__file__).resolve().parent.parent
