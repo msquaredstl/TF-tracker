@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from collections import OrderedDict
 from typing import Dict, Tuple
 
 from django.contrib import admin, messages
+from django.contrib.admin.sites import NotRegistered
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import UserAdmin as DjangoUserAdmin
 from django.db import transaction
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch
+from django.urls import reverse
 from django.utils.html import format_html, format_html_join
 
 from .models import (
@@ -27,10 +32,228 @@ from .models import (
 )
 
 
+def _collection_purchases(collection) -> list[Purchase]:
+    if not getattr(collection, "pk", None):
+        return []
+
+    cache = getattr(collection, "_prefetched_objects_cache", {})
+    if cache and "purchases" in cache:
+        return list(cache["purchases"])
+
+    manager = getattr(collection, "purchases", None)
+    if manager is None:
+        return []
+
+    return list(
+        manager.select_related(
+            "item__company",
+            "item__line",
+            "item__series",
+            "item__type",
+            "item__category",
+            "vendor",
+        ).order_by("-purchase_date", "-order_date", "pk")
+    )
+
+
+def _collection_item_rows(collection) -> list[dict[str, object]]:
+    rows: "OrderedDict[object, dict[str, object]]" = OrderedDict()
+    for purchase in _collection_purchases(collection):
+        item = getattr(purchase, "item", None)
+        if not item:
+            continue
+        key = getattr(item, "pk", id(item))
+        entry = rows.setdefault(
+            key,
+            {"item": item, "quantity": 0},
+        )
+        quantity = purchase.quantity if purchase.quantity not in (None, 0) else 1
+        entry["quantity"] = int(entry["quantity"]) + quantity
+    return list(rows.values())
+
+
+def render_collection_items(collection):
+    rows = _collection_item_rows(collection)
+    if not rows:
+        return "—"
+
+    def render(row: dict[str, object]):
+        item = row.get("item")
+        quantity = int(row.get("quantity", 0) or 0)
+        if not item:
+            return "—"
+
+        name = getattr(item, "name", "Unknown item")
+        if getattr(item, "pk", None):
+            url = reverse("admin:tracker_item_change", args=[item.pk])
+            label = format_html('<a href="{}">{}</a>', url, name)
+        else:
+            label = name
+        label = format_html("<strong>{}</strong>", label)
+
+        details: list[str] = []
+        if quantity > 1:
+            details.append(f"qty {quantity}")
+        status = getattr(item, "status", None)
+        if status:
+            details.append(str(status))
+        company = getattr(getattr(item, "company", None), "name", None)
+        if company:
+            details.append(company)
+
+        if details:
+            return format_html("{}<br><small>{}</small>", label, " • ".join(details))
+        return label
+
+    return format_html_join("<br>", "{}", ((render(row),) for row in rows))
+
+
+def render_collection_orders(collection):
+    purchases = _collection_purchases(collection)
+    if not purchases:
+        return "—"
+
+    def render(purchase: Purchase):
+        item = getattr(purchase, "item", None)
+        if item and getattr(item, "pk", None):
+            item_label = format_html(
+                '<a href="{}">{}</a>',
+                reverse("admin:tracker_item_change", args=[item.pk]),
+                item.name,
+            )
+        elif item:
+            item_label = item.name
+        else:
+            item_label = "—"
+
+        header = format_html("<strong>{}</strong>", item_label)
+
+        details: list[str] = []
+        vendor = getattr(getattr(purchase, "vendor", None), "name", None)
+        if vendor:
+            details.append(vendor)
+        if purchase.order_date:
+            details.append(f"ordered {purchase.order_date:%Y-%m-%d}")
+        if purchase.purchase_date:
+            details.append(f"purchased {purchase.purchase_date:%Y-%m-%d}")
+        if purchase.ship_date:
+            details.append(f"shipped {purchase.ship_date:%Y-%m-%d}")
+        if purchase.price is not None:
+            currency = f" {purchase.currency}" if purchase.currency else ""
+            details.append(f"price {purchase.price:,.2f}{currency}")
+        if purchase.quantity not in (None, 1):
+            details.append(f"qty {purchase.quantity}")
+        if purchase.order_number:
+            details.append(f"order {purchase.order_number}")
+
+        detail_block = " • ".join(details)
+        if detail_block:
+            return format_html("{}<br><small>{}</small>", header, detail_block)
+        return header
+
+    return format_html_join(
+        "<br><br>", "{}", ((render(purchase),) for purchase in purchases)
+    )
+
+
+class CollectionPurchaseInline(admin.TabularInline):
+    model = Purchase
+    fk_name = "collection"
+    extra = 0
+    autocomplete_fields = ("item", "vendor")
+    fields = (
+        "item",
+        "vendor",
+        "order_date",
+        "purchase_date",
+        "ship_date",
+        "price",
+        "tax",
+        "shipping",
+        "currency",
+        "order_number",
+        "quantity",
+        "notes",
+    )
+    ordering = ("-purchase_date", "-order_date", "pk")
+    show_change_link = True
+
+
 @admin.register(Collection)
 class CollectionAdmin(admin.ModelAdmin):
-    list_display = ("name", "user", "created_at")
+    inlines = (CollectionPurchaseInline,)
+    list_display = ("name", "user", "item_count", "order_count", "created_at")
+    list_select_related = ("user",)
     search_fields = ("name", "user__username", "user__email")
+    autocomplete_fields = ("user",)
+    readonly_fields = (
+        "item_overview",
+        "order_overview",
+        "created_at",
+        "updated_at",
+    )
+    fieldsets = (
+        (None, {"fields": ("name", "user")}),
+        (
+            "Collection contents",
+            {
+                "fields": (
+                    "item_overview",
+                    "order_overview",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
+    )
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related(
+            Prefetch(
+                "purchases",
+                queryset=Purchase.objects.select_related(
+                    "item__company",
+                    "item__line",
+                    "item__series",
+                    "item__type",
+                    "item__category",
+                    "vendor",
+                ).order_by("-purchase_date", "-order_date", "pk"),
+            )
+        ).annotate(
+            _item_count=Count("purchases__item", distinct=True),
+            _order_count=Count("purchases", distinct=True),
+        )
+
+    @admin.display(description="Items", ordering="_item_count")
+    def item_count(self, obj: Collection) -> int:
+        if hasattr(obj, "_item_count"):
+            return obj._item_count
+        return (
+            Purchase.objects.filter(collection=obj).values("item_id").distinct().count()
+        )
+
+    @admin.display(description="Orders", ordering="_order_count")
+    def order_count(self, obj: Collection) -> int:
+        if hasattr(obj, "_order_count"):
+            return obj._order_count
+        return obj.purchases.count()
+
+    @admin.display(description="Items")
+    def item_overview(self, obj: Collection):
+        return render_collection_items(obj)
+
+    @admin.display(description="Orders")
+    def order_overview(self, obj: Collection):
+        return render_collection_orders(obj)
 
 
 @admin.register(Company)
@@ -417,3 +640,78 @@ class ItemAdmin(admin.ModelAdmin):
         return format_html_join(
             "<br><br>", "{}", ((render(purchase),) for purchase in purchases)
         )
+
+
+class CollectionInline(admin.StackedInline):
+    model = Collection
+    fk_name = "user"
+    can_delete = False
+    extra = 0
+    max_num = 1
+    show_change_link = True
+    readonly_fields = ("items_summary", "orders_summary", "created_at", "updated_at")
+    fieldsets = (
+        (None, {"fields": ("name",)}),
+        (
+            "Collection contents",
+            {
+                "fields": (
+                    "items_summary",
+                    "orders_summary",
+                )
+            },
+        ),
+        (
+            "Timestamps",
+            {"fields": ("created_at", "updated_at")},
+        ),
+    )
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related(
+            Prefetch(
+                "purchases",
+                queryset=Purchase.objects.select_related(
+                    "item__company",
+                    "item__line",
+                    "item__series",
+                    "item__type",
+                    "item__category",
+                    "vendor",
+                ).order_by("-purchase_date", "-order_date", "pk"),
+            )
+        )
+
+    @admin.display(description="Items")
+    def items_summary(self, obj: Collection):
+        return render_collection_items(obj)
+
+    @admin.display(description="Orders")
+    def orders_summary(self, obj: Collection):
+        return render_collection_orders(obj)
+
+
+User = get_user_model()
+
+try:
+    admin.site.unregister(User)
+except NotRegistered:  # pragma: no cover - depends on Django internals
+    pass
+
+
+@admin.register(User)
+class TrackerUserAdmin(DjangoUserAdmin):
+    inlines = (CollectionInline,)
+    list_display = DjangoUserAdmin.list_display + ("collection_name",)
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.select_related("collection")
+
+    @admin.display(description="Collection")
+    def collection_name(self, obj):
+        collection = getattr(obj, "collection", None)
+        if not collection:
+            return "—"
+        return collection.name
